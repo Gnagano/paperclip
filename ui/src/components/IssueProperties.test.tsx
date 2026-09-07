@@ -454,6 +454,39 @@ function renderProperties(container: HTMLDivElement, props: ComponentProps<typeo
 }
 
 describe("IssueProperties", () => {
+  it("renders and updates CURIOX scheduling fields", async () => {
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, {
+      issue: createIssue({
+        startDate: "2026-09-08",
+        dueDate: "2026-09-12",
+        estimatedHours: 6.5,
+      }),
+      onUpdate,
+      inline: true,
+    });
+    await flush();
+
+    const startDate = container.querySelector<HTMLInputElement>('input[aria-label="Start date"]')!;
+    const dueDate = container.querySelector<HTMLInputElement>('input[aria-label="Due date"]')!;
+    const hours = container.querySelector<HTMLInputElement>('input[aria-label="Estimated hours"]')!;
+    expect(startDate.value).toBe("2026-09-08");
+    expect(dueDate.value).toBe("2026-09-12");
+    expect(hours.value).toBe("6.5");
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+      setter.call(startDate, "2026-09-09");
+      startDate.dispatchEvent(new Event("change", { bubbles: true }));
+      setter.call(hours, "8.25");
+      hours.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith({ startDate: "2026-09-09" });
+    expect(onUpdate).toHaveBeenCalledWith({ estimatedHours: 8.25 });
+    act(() => root.unmount());
+  });
+
   let container: HTMLDivElement;
 
   beforeEach(() => {

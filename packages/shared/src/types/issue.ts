@@ -815,6 +815,10 @@ export interface Issue {
   originFingerprint?: string | null;
   requestDepth: number;
   billingCode: string | null;
+  /** CURIOX scheduling metadata. Optional keeps older cached/imported payloads compatible. */
+  startDate?: string | null;
+  dueDate?: string | null;
+  estimatedHours?: number | null;
   assigneeAdapterOverrides: IssueAssigneeAdapterOverrides | null;
   executionPolicy?: IssueExecutionPolicy | null;
   executionState?: IssueExecutionState | null;
@@ -898,6 +902,9 @@ export type CompactIssue = Pick<
   | "originRunId"
   | "requestDepth"
   | "billingCode"
+  | "startDate"
+  | "dueDate"
+  | "estimatedHours"
   | "executionWorkspaceId"
   | "startedAt"
   | "completedAt"

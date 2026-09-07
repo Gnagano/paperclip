@@ -2176,6 +2176,44 @@ export function IssueProperties({
         </PropertyPicker>
       </PropertySection>
 
+      <PropertySection title="Schedule">
+        <PropertyRow label="Start date">
+          <input
+            type="date"
+            className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+            value={issue.startDate ?? ""}
+            onChange={(event) => onUpdate({ startDate: event.target.value || null })}
+            aria-label="Start date"
+          />
+        </PropertyRow>
+        <PropertyRow label="Due date">
+          <input
+            type="date"
+            className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+            value={issue.dueDate ?? ""}
+            onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
+            aria-label="Due date"
+          />
+        </PropertyRow>
+        <PropertyRow label="Hours">
+          <input
+            key={`${issue.id}:${issue.estimatedHours ?? ""}`}
+            type="number"
+            min="0"
+            max="999999.99"
+            step="0.25"
+            className="min-w-0 w-28 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+            defaultValue={issue.estimatedHours ?? ""}
+            placeholder="0"
+            onBlur={(event) => {
+              const value = event.target.value.trim();
+              onUpdate({ estimatedHours: value === "" ? null : Number(value) });
+            }}
+            aria-label="Estimated hours"
+          />
+        </PropertyRow>
+      </PropertySection>
+
       <PropertySection title="Relationships">
         <PropertyPicker
           inline={inline}

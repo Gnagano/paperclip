@@ -48,6 +48,27 @@ describe("issue validators", () => {
       .toBeUndefined();
   });
 
+  it("validates CURIOX issue scheduling fields on create and update", () => {
+    expect(createIssueSchema.parse({
+      title: "Scheduled work",
+      startDate: "2026-09-08",
+      dueDate: "2026-09-12",
+      estimatedHours: 6.5,
+    })).toMatchObject({
+      startDate: "2026-09-08",
+      dueDate: "2026-09-12",
+      estimatedHours: 6.5,
+    });
+    expect(updateIssueSchema.parse({
+      startDate: null,
+      dueDate: null,
+      estimatedHours: null,
+    })).toEqual({ startDate: null, dueDate: null, estimatedHours: null });
+    expect(updateIssueSchema.safeParse({ startDate: "08/09/2026" }).success).toBe(false);
+    expect(updateIssueSchema.safeParse({ dueDate: "2026-02-30" }).success).toBe(false);
+    expect(updateIssueSchema.safeParse({ estimatedHours: -1 }).success).toBe(false);
+  });
+
   it("accepts review policies on create and update while rejecting unknown values", () => {
     expect(createIssueSchema.parse({ title: "Human review", reviewPolicy: "human_only" }).reviewPolicy)
       .toBe("human_only");
