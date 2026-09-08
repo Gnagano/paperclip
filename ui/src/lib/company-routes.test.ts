@@ -121,6 +121,13 @@ describe("company routes", () => {
     expect(toCompanyRelativePath("/PAP/timeline")).toBe("/timeline");
   });
 
+  it("treats /schedule as a board route that needs a company prefix", () => {
+    expect(isBoardPathWithoutPrefix("/schedule")).toBe(true);
+    expect(extractCompanyPrefixFromPath("/schedule")).toBeNull();
+    expect(applyCompanyPrefix("/schedule", "ECB")).toBe("/ECB/schedule");
+    expect(toCompanyRelativePath("/ECB/schedule")).toBe("/schedule");
+  });
+
   it("treats Skill Studio create mode as an unprefixed board route", () => {
     expect(isBoardPathWithoutPrefix("/skills/studio/new")).toBe(true);
     expect(extractCompanyPrefixFromPath("/skills/studio/new")).toBeNull();
