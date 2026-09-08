@@ -2179,18 +2179,20 @@ export function IssueProperties({
       <PropertySection title="Schedule">
         <PropertyRow label="Start date">
           <input
+            key={`${issue.id}:${issue.startDate ?? ""}`}
             type="date"
             className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-            value={issue.startDate ?? ""}
+            defaultValue={issue.startDate ?? ""}
             onChange={(event) => onUpdate({ startDate: event.target.value || null })}
             aria-label="Start date"
           />
         </PropertyRow>
         <PropertyRow label="Due date">
           <input
+            key={`${issue.id}:${issue.dueDate ?? ""}`}
             type="date"
             className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-            value={issue.dueDate ?? ""}
+            defaultValue={issue.dueDate ?? ""}
             onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
             aria-label="Due date"
           />

@@ -487,6 +487,39 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
+  it("keeps a selected schedule date while the issue update is pending", async () => {
+    const onUpdate = vi.fn();
+    const unchangedIssue = createIssue({ startDate: "2026-09-08" });
+    const root = renderProperties(container, {
+      issue: unchangedIssue,
+      onUpdate,
+      inline: true,
+    });
+    await flush();
+
+    const startDate = container.querySelector<HTMLInputElement>('input[aria-label="Start date"]')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+      setter.call(startDate, "2026-09-09");
+      startDate.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <IssueProperties issue={unchangedIssue} onUpdate={onUpdate} inline />
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Start date"]')!.value).toBe(
+      "2026-09-09",
+    );
+    expect(onUpdate).toHaveBeenCalledWith({ startDate: "2026-09-09" });
+    act(() => root.unmount());
+  });
+
   let container: HTMLDivElement;
 
   beforeEach(() => {
