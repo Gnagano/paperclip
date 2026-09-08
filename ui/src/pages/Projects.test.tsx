@@ -252,7 +252,7 @@ describe("Projects", () => {
     const alphaLink = Array.from(container.querySelectorAll<HTMLAnchorElement>("a")).find((link) =>
       link.textContent?.includes("Alpha"),
     );
-    expect(alphaLink?.textContent).toContain("2026/09/08 - 2026/09/30");
+    expect(alphaLink?.textContent).toContain("2026/09/08-2026/09/30");
     expect(alphaLink?.textContent).toContain("10 H / 56 H");
   });
 });

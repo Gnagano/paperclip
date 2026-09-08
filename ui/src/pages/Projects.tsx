@@ -233,10 +233,12 @@ export function Projects() {
                               {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? "" : "s"}
                             </span>
                             <span
-                              className="hidden text-center text-xs text-muted-foreground tabular-nums whitespace-nowrap md:inline"
+                              className="hidden grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs text-muted-foreground tabular-nums whitespace-nowrap md:grid"
                               title="Scheduled task date range"
                             >
-                              {formatScheduleDate(project.scheduleStartDate)} - {formatScheduleDate(project.scheduleEndDate)}
+                              <span className="text-right">{formatScheduleDate(project.scheduleStartDate)}</span>
+                              <span aria-hidden="true">-</span>
+                              <span className="text-left">{formatScheduleDate(project.scheduleEndDate)}</span>
                             </span>
                             <span
                               className="text-right text-xs font-medium text-foreground tabular-nums whitespace-nowrap"
