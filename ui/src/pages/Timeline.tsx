@@ -303,7 +303,7 @@ function TimelineSummaryStats({
   );
 }
 
-export function Timeline() {
+export function Timeline({ initialMode = "activity" }: { initialMode?: "activity" | "schedule" } = {}) {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const [zoom, setZoom] = useState<ZoomLevel>("day");
@@ -312,7 +312,7 @@ export function Timeline() {
   const [rangePreset, setRangePreset] = useState<RangePreset>("7d");
   const [dateRange, setDateRange] = useState<DateRangeState>(() => presetRange("7d"));
   const [visibleWindow, setVisibleWindow] = useState<VisibleTimelineWindow | null>(null);
-  const [timelineMode, setTimelineMode] = useState<"activity" | "schedule">("activity");
+  const [timelineMode, setTimelineMode] = useState<"activity" | "schedule">(initialMode);
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Timeline" }]);

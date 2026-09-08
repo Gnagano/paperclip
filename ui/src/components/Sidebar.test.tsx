@@ -414,9 +414,12 @@ describe("Sidebar", () => {
     const companySection = sections.find((section) => section.textContent?.startsWith("Company"));
     expect(workSection?.textContent).not.toContain("Timeline");
     expect(companySection?.textContent).toContain("Timeline");
+    expect(companySection?.textContent).toContain("Task Schedule");
 
     const timelineLink = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent === "Timeline");
     expect(timelineLink?.getAttribute("href")).toBe("/timeline");
+    const scheduleLink = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent === "Task Schedule");
+    expect(scheduleLink?.getAttribute("href")).toBe("/schedule");
 
     flushSync(() => {
       root.unmount();
