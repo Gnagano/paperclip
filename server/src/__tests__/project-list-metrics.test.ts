@@ -5,8 +5,8 @@ describe("buildProjectListMetricMaps", () => {
   it("maps task counts by project, coercing string counts to numbers", () => {
     const { taskCountByProjectId } = buildProjectListMetricMaps(
       [
-        { projectId: "p1", count: 24, scheduleStartDate: "2026-09-08", estimatedHoursTotal: 56 },
-        { projectId: "p2", count: 11 as unknown as number, scheduleStartDate: null, estimatedHoursTotal: 16.5 },
+        { projectId: "p1", count: 24, scheduleStartDate: "2026-09-08", scheduleEndDate: "2026-09-30", estimatedHoursTotal: 56, estimatedHoursCompleted: 10 },
+        { projectId: "p2", count: 11 as unknown as number, scheduleStartDate: null, scheduleEndDate: null, estimatedHoursTotal: 16.5, estimatedHoursCompleted: 0 },
       ],
       [],
     );
@@ -17,7 +17,7 @@ describe("buildProjectListMetricMaps", () => {
 
   it("ignores task-count rows with a null project id", () => {
     const { taskCountByProjectId } = buildProjectListMetricMaps(
-      [{ projectId: null, count: 5, scheduleStartDate: "2026-09-01", estimatedHoursTotal: 10 }],
+      [{ projectId: null, count: 5, scheduleStartDate: "2026-09-01", scheduleEndDate: "2026-09-02", estimatedHoursTotal: 10, estimatedHoursCompleted: 5 }],
       [],
     );
 
@@ -25,18 +25,20 @@ describe("buildProjectListMetricMaps", () => {
   });
 
   it("maps earliest start dates and total estimated hours by project", () => {
-    const { scheduleStartDateByProjectId, estimatedHoursTotalByProjectId } = buildProjectListMetricMaps(
+    const { scheduleStartDateByProjectId, scheduleEndDateByProjectId, estimatedHoursTotalByProjectId, estimatedHoursCompletedByProjectId } = buildProjectListMetricMaps(
       [
-        { projectId: "p1", count: 2, scheduleStartDate: "2026-09-08", estimatedHoursTotal: 56 },
-        { projectId: "p2", count: 1, scheduleStartDate: null, estimatedHoursTotal: 0 },
+        { projectId: "p1", count: 2, scheduleStartDate: "2026-09-08", scheduleEndDate: "2026-09-30", estimatedHoursTotal: 56, estimatedHoursCompleted: 10 },
+        { projectId: "p2", count: 1, scheduleStartDate: null, scheduleEndDate: null, estimatedHoursTotal: 0, estimatedHoursCompleted: 0 },
       ],
       [],
     );
 
     expect(scheduleStartDateByProjectId.get("p1")).toBe("2026-09-08");
     expect(scheduleStartDateByProjectId.get("p2")).toBeNull();
+    expect(scheduleEndDateByProjectId.get("p1")).toBe("2026-09-30");
     expect(estimatedHoursTotalByProjectId.get("p1")).toBe(56);
     expect(estimatedHoursTotalByProjectId.get("p2")).toBe(0);
+    expect(estimatedHoursCompletedByProjectId.get("p1")).toBe(10);
   });
 
   it("maps positive budgets with their window kind", () => {

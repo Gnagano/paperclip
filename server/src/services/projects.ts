@@ -67,7 +67,9 @@ interface ProjectWithGoals extends Omit<ProjectRow, "executionWorkspacePolicy"> 
   managedByPlugin: ProjectManagedByPlugin | null;
   taskCount?: number;
   scheduleStartDate?: string | null;
+  scheduleEndDate?: string | null;
   estimatedHoursTotal?: number;
+  estimatedHoursCompleted?: number;
   budget?: ProjectBudgetSummary | null;
 }
 
@@ -326,7 +328,9 @@ type TaskScheduleMetricRow = {
   projectId: string | null;
   count: number;
   scheduleStartDate: string | null;
+  scheduleEndDate: string | null;
   estimatedHoursTotal: number;
+  estimatedHoursCompleted: number;
 };
 type ProjectBudgetRow = { scopeId: string; amount: number; windowKind: string };
 
@@ -338,12 +342,16 @@ type ProjectBudgetRow = { scopeId: string; amount: number; windowKind: string };
 export function buildProjectListMetricMaps(taskMetricRows: TaskScheduleMetricRow[], budgetRows: ProjectBudgetRow[]) {
   const taskCountByProjectId = new Map<string, number>();
   const scheduleStartDateByProjectId = new Map<string, string | null>();
+  const scheduleEndDateByProjectId = new Map<string, string | null>();
   const estimatedHoursTotalByProjectId = new Map<string, number>();
+  const estimatedHoursCompletedByProjectId = new Map<string, number>();
   for (const row of taskMetricRows) {
     if (!row.projectId) continue;
     taskCountByProjectId.set(row.projectId, Number(row.count) || 0);
     scheduleStartDateByProjectId.set(row.projectId, row.scheduleStartDate ?? null);
+    scheduleEndDateByProjectId.set(row.projectId, row.scheduleEndDate ?? null);
     estimatedHoursTotalByProjectId.set(row.projectId, Number(row.estimatedHoursTotal) || 0);
+    estimatedHoursCompletedByProjectId.set(row.projectId, Number(row.estimatedHoursCompleted) || 0);
   }
 
   const budgetByProjectId = new Map<string, ProjectBudgetSummary>();
@@ -359,7 +367,9 @@ export function buildProjectListMetricMaps(taskMetricRows: TaskScheduleMetricRow
   return {
     taskCountByProjectId,
     scheduleStartDateByProjectId,
+    scheduleEndDateByProjectId,
     estimatedHoursTotalByProjectId,
+    estimatedHoursCompletedByProjectId,
     budgetByProjectId,
   };
 }
@@ -384,7 +394,9 @@ async function attachListMetrics(
         projectId: issues.projectId,
         count: sql<number>`count(*)::int`,
         scheduleStartDate: sql<string | null>`min(${issues.startDate})`,
+        scheduleEndDate: sql<string | null>`max(${issues.dueDate})`,
         estimatedHoursTotal: sql<number>`coalesce(sum(${issues.estimatedHours}), 0)::float8`,
+        estimatedHoursCompleted: sql<number>`coalesce(sum(case when ${issues.status} = 'done' then ${issues.estimatedHours} else 0 end), 0)::float8`,
       })
       .from(issues)
       .where(and(eq(issues.companyId, companyId), inArray(issues.projectId, projectIds)))
@@ -410,7 +422,9 @@ async function attachListMetrics(
   const {
     taskCountByProjectId,
     scheduleStartDateByProjectId,
+    scheduleEndDateByProjectId,
     estimatedHoursTotalByProjectId,
+    estimatedHoursCompletedByProjectId,
     budgetByProjectId,
   } = buildProjectListMetricMaps(
     taskMetricRows,
@@ -421,7 +435,9 @@ async function attachListMetrics(
     ...row,
     taskCount: taskCountByProjectId.get(row.id) ?? 0,
     scheduleStartDate: scheduleStartDateByProjectId.get(row.id) ?? null,
+    scheduleEndDate: scheduleEndDateByProjectId.get(row.id) ?? null,
     estimatedHoursTotal: estimatedHoursTotalByProjectId.get(row.id) ?? 0,
+    estimatedHoursCompleted: estimatedHoursCompletedByProjectId.get(row.id) ?? 0,
     budget: budgetByProjectId.get(row.id) ?? null,
   }));
 }

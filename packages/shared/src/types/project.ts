@@ -105,8 +105,12 @@ export interface Project {
   taskCount?: number;
   /** Earliest scheduled start date among issues assigned to this project. */
   scheduleStartDate?: string | null;
+  /** Latest scheduled due date among issues assigned to this project. */
+  scheduleEndDate?: string | null;
   /** Sum of estimated hours among issues assigned to this project. */
   estimatedHoursTotal?: number;
+  /** Sum of estimated hours for completed issues assigned to this project. */
+  estimatedHoursCompleted?: number;
   /**
    * Active budget for the project, when set. Populated by the projects list
    * endpoint (IA Phase 4 — PAP-60); omitted on single-project payloads.

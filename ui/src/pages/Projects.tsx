@@ -13,7 +13,7 @@ import { MembershipAction } from "../components/MembershipAction";
 import { StarToggle } from "../components/StarToggle";
 import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
-import { formatDate, formatNumber, formatProjectBudget, projectUrl } from "../lib/utils";
+import { formatNumber, projectUrl } from "../lib/utils";
 import {
   isStarred,
   resourceMembershipState,
@@ -34,6 +34,11 @@ const PROJECT_SORT_OPTIONS: Array<{ field: ProjectSortField; label: string }> = 
   { field: "created", label: "Created" },
   { field: "targetDate", label: "Target date" },
 ];
+
+function formatScheduleDate(value: string | null | undefined) {
+  if (!value) return "—";
+  return value.slice(0, 10).replaceAll("-", "/");
+}
 
 function compareProjectNames(left: Project, right: Project) {
   const nameDiff = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
@@ -220,66 +225,43 @@ export function Projects() {
                         to={projectUrl(project)}
                         className={state === "left" ? "group text-foreground/55" : "group"}
                         trailing={
-                          <div className="flex items-center gap-3">
+                          <div className="grid grid-cols-[7rem_auto] items-center gap-x-4 sm:grid-cols-[5rem_7rem_auto] md:grid-cols-[5rem_13rem_7rem_auto]">
                             <span
-                              className="hidden text-xs text-muted-foreground tabular-nums sm:inline"
+                              className="hidden text-right text-xs text-muted-foreground tabular-nums sm:inline"
                               title={`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? "" : "s"}`}
                             >
                               {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? "" : "s"}
                             </span>
                             <span
-                              className="hidden text-xs text-muted-foreground tabular-nums md:inline"
-                              title="Earliest scheduled task start"
+                              className="hidden text-center text-xs text-muted-foreground tabular-nums whitespace-nowrap md:inline"
+                              title="Scheduled task date range"
                             >
-                              Start {project.scheduleStartDate ? formatDate(project.scheduleStartDate) : "—"}
+                              {formatScheduleDate(project.scheduleStartDate)} - {formatScheduleDate(project.scheduleEndDate)}
                             </span>
                             <span
-                              className="text-xs font-medium text-foreground tabular-nums"
-                              title="Total estimated hours for project tasks"
+                              className="text-right text-xs font-medium text-foreground tabular-nums whitespace-nowrap"
+                              title="Completed estimated hours / total estimated hours"
                             >
-                              {formatNumber(project.estimatedHoursTotal ?? 0)}h
+                              {formatNumber(project.estimatedHoursCompleted ?? 0)} H / {formatNumber(project.estimatedHoursTotal ?? 0)} H
                             </span>
-                            {project.budget && (
-                              <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
-                                {formatProjectBudget(project.budget)}
-                              </span>
-                            )}
-                            {project.targetDate && (
-                              <span className="hidden text-xs text-muted-foreground md:inline">
-                                {formatDate(project.targetDate)}
-                              </span>
-                            )}
-                            <StatusBadge status={project.status} />
-                            <MembershipAction
-                              state={state}
-                              pending={joinLeavePending}
-                              pendingState={joinLeavePending ? membershipMutation.variables?.state : null}
-                              resourceName={project.name}
-                              onJoin={() => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                state: "joined",
-                              })}
-                              onLeave={() => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                state: "left",
-                              })}
-                            />
-                            <StarToggle
-                              size="row"
-                              starred={starred}
-                              pending={starPending}
-                              resourceName={project.name}
-                              onToggle={(next) => membershipMutation.mutate({
-                                resourceType: "project",
-                                resourceId: project.id,
-                                resourceName: project.name,
-                                starred: next,
-                              })}
-                            />
+                            <div className="flex min-w-52 items-center justify-end gap-2">
+                              <StatusBadge status={project.status} />
+                              <MembershipAction
+                                state={state}
+                                pending={joinLeavePending}
+                                pendingState={joinLeavePending ? membershipMutation.variables?.state : null}
+                                resourceName={project.name}
+                                onJoin={() => membershipMutation.mutate({ resourceType: "project", resourceId: project.id, resourceName: project.name, state: "joined" })}
+                                onLeave={() => membershipMutation.mutate({ resourceType: "project", resourceId: project.id, resourceName: project.name, state: "left" })}
+                              />
+                              <StarToggle
+                                size="row"
+                                starred={starred}
+                                pending={starPending}
+                                resourceName={project.name}
+                                onToggle={(next) => membershipMutation.mutate({ resourceType: "project", resourceId: project.id, resourceName: project.name, starred: next })}
+                              />
+                            </div>
                           </div>
                         }
                       />
