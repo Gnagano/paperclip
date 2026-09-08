@@ -63,7 +63,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IssuePropertiesPlansTab } from "./IssuePropertiesPlansTab";
 import { IssuePropertiesArtifactsTab } from "./IssuePropertiesArtifactsTab";
-import { User, ArrowUpRight, Plus, GitBranch, FolderOpen, HardDrive, Check, Clock, RotateCcw, Loader2, CheckCircle2, ArchiveRestore } from "lucide-react";
+import { User, ArrowUpRight, Plus, GitBranch, FolderOpen, HardDrive, Check, Clock, RotateCcw, Loader2, CheckCircle2, ArchiveRestore, X } from "lucide-react";
 import { AgentIcon } from "../AgentIconPicker";
 import { InlineEntitySelector, type InlineEntityOption } from "../InlineEntitySelector";
 import {
@@ -97,6 +97,48 @@ import { issueReviewPolicyBadge } from "../../lib/review-policy";
 import { IssueCasesPanel } from "../IssueCasesPanel";
 import { ExpandRelationListButton, RemovableIssueReferencePill } from "./relation-controls";
 import { Badge } from "@/components/ui/badge";
+
+function ScheduleDateInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null | undefined;
+  onChange: (value: string | null) => void;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <input
+        type="date"
+        className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+        value={draft}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDraft(next);
+          onChange(next || null);
+        }}
+        aria-label={label}
+      />
+      {draft ? (
+        <button
+          type="button"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={`Clear ${label}`}
+          title={`Clear ${label}`}
+          onClick={() => {
+            setDraft("");
+            onChange(null);
+          }}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 function TruncatedCopyable({ value, icon: Icon }: { value: string; icon: ComponentType<{ className?: string }> }) {
   const [copied, setCopied] = useState(false);
@@ -2178,23 +2220,19 @@ export function IssueProperties({
 
       <PropertySection title="Schedule">
         <PropertyRow label="Start date">
-          <input
+          <ScheduleDateInput
             key={`${issue.id}:${issue.startDate ?? ""}`}
-            type="date"
-            className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-            defaultValue={issue.startDate ?? ""}
-            onChange={(event) => onUpdate({ startDate: event.target.value || null })}
-            aria-label="Start date"
+            label="Start date"
+            value={issue.startDate}
+            onChange={(startDate) => onUpdate({ startDate })}
           />
         </PropertyRow>
         <PropertyRow label="Due date">
-          <input
+          <ScheduleDateInput
             key={`${issue.id}:${issue.dueDate ?? ""}`}
-            type="date"
-            className="min-w-0 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-            defaultValue={issue.dueDate ?? ""}
-            onChange={(event) => onUpdate({ dueDate: event.target.value || null })}
-            aria-label="Due date"
+            label="Due date"
+            value={issue.dueDate}
+            onChange={(dueDate) => onUpdate({ dueDate })}
           />
         </PropertyRow>
         <PropertyRow label="Hours">

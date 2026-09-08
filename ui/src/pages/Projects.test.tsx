@@ -140,6 +140,8 @@ describe("Projects", () => {
         name: "Alpha",
         description: "First project",
         updatedAt: new Date("2026-01-01T00:00:00Z"),
+        scheduleStartDate: "2026-09-08",
+        estimatedHoursTotal: 56,
       }),
     ]);
     mockResourceMembershipsApi.listMine.mockResolvedValue({
@@ -240,5 +242,15 @@ describe("Projects", () => {
 
     expect(hiddenDescriptionLine).not.toBeNull();
     expect(hiddenDescriptionLine?.className).toContain("min-h-4");
+  });
+
+  it("shows each project's earliest task start and total estimated hours", async () => {
+    await renderProjects();
+
+    const alphaLink = Array.from(container.querySelectorAll<HTMLAnchorElement>("a")).find((link) =>
+      link.textContent?.includes("Alpha"),
+    );
+    expect(alphaLink?.textContent).toContain("Start");
+    expect(alphaLink?.textContent).toContain("56h");
   });
 });

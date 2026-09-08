@@ -484,6 +484,13 @@ describe("IssueProperties", () => {
 
     expect(onUpdate).toHaveBeenCalledWith({ startDate: "2026-09-09" });
     expect(onUpdate).toHaveBeenCalledWith({ estimatedHours: 8.25 });
+
+    const clearDueDate = container.querySelector<HTMLButtonElement>('button[aria-label="Clear Due date"]')!;
+    await act(async () => {
+      clearDueDate.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Due date"]')!.value).toBe("");
+    expect(onUpdate).toHaveBeenCalledWith({ dueDate: null });
     act(() => root.unmount());
   });
 

@@ -227,6 +227,18 @@ export function Projects() {
                             >
                               {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? "" : "s"}
                             </span>
+                            <span
+                              className="hidden text-xs text-muted-foreground tabular-nums md:inline"
+                              title="Earliest scheduled task start"
+                            >
+                              Start {project.scheduleStartDate ? formatDate(project.scheduleStartDate) : "—"}
+                            </span>
+                            <span
+                              className="text-xs font-medium text-foreground tabular-nums"
+                              title="Total estimated hours for project tasks"
+                            >
+                              {formatNumber(project.estimatedHoursTotal ?? 0)}h
+                            </span>
                             {project.budget && (
                               <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
                                 {formatProjectBudget(project.budget)}
