@@ -30,6 +30,7 @@ import {
 } from "@/components/timeline/WorkTimelineChart";
 import { formatDuration, TIMELINE_COLORS } from "@/lib/timeline/layout";
 import { cn } from "@/lib/utils";
+import { TaskScheduleGantt } from "@/components/timeline/TaskScheduleGantt";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
 const TIMELINE_PAGE_LIMIT = 500;
@@ -311,6 +312,7 @@ export function Timeline() {
   const [rangePreset, setRangePreset] = useState<RangePreset>("7d");
   const [dateRange, setDateRange] = useState<DateRangeState>(() => presetRange("7d"));
   const [visibleWindow, setVisibleWindow] = useState<VisibleTimelineWindow | null>(null);
+  const [timelineMode, setTimelineMode] = useState<"activity" | "schedule">("activity");
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Timeline" }]);
@@ -326,7 +328,7 @@ export function Timeline() {
   const { data, isLoading, error } = useQuery({
     queryKey: [...queryKeys.workTimeline(selectedCompanyId ?? ""), dateRange.fromDate, dateRange.toDate],
     queryFn: ({ signal }) => loadTimelineWindow(selectedCompanyId!, params!, signal),
-    enabled: !!selectedCompanyId && !!params,
+    enabled: timelineMode === "activity" && !!selectedCompanyId && !!params,
   });
 
   useEffect(() => {
@@ -358,11 +360,31 @@ export function Timeline() {
   }
 
   const header = (
-    <div className="flex items-center gap-2">
-      <GanttChartSquare className="h-6 w-6 text-muted-foreground" />
-      <h1 className="text-3xl font-semibold tracking-tight">Work Timeline</h1>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <GanttChartSquare className="h-6 w-6 text-muted-foreground" />
+        <h1 className="text-3xl font-semibold tracking-tight">Timeline</h1>
+      </div>
+      <Segmented
+        value={timelineMode}
+        onChange={setTimelineMode}
+        options={[
+          { value: "schedule", label: "Task Schedule" },
+          { value: "activity", label: "Run Activity" },
+        ]}
+      />
     </div>
   );
+
+  if (timelineMode === "schedule") {
+    return (
+      <div className="space-y-6">
+        <RequestCollapsedSidebar />
+        {header}
+        <TaskScheduleGantt companyId={selectedCompanyId} />
+      </div>
+    );
+  }
 
   const adjustZoom = (factor: number) => {
     zoomTouched.current = true;
