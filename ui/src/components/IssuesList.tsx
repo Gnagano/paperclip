@@ -51,7 +51,10 @@ import { collectSubtreeLiveCounts } from "../lib/liveIssueIds";
 import {
   InboxIssueMetaLeading,
   InboxIssueTrailingColumns,
+  IssueScheduleColumns,
   IssueColumnPicker,
+  formatIssueScheduleDate,
+  formatIssueScheduleHours,
   issueActivityText,
   issueTrailingColumns,
 } from "./IssueColumns";
@@ -2186,9 +2189,17 @@ export function IssuesList({
                             />
                           </>
                         )}
-                        mobileMeta={issueActivityText(issue).toLowerCase()}
+                        mobileMeta={(
+                          <span className="inline-flex flex-wrap items-center gap-x-2">
+                            <span>Start {formatIssueScheduleDate(issue.startDate)}</span>
+                            <span>{formatIssueScheduleHours(issue.estimatedHours)}</span>
+                            <span>{issueActivityText(issue).toLowerCase()}</span>
+                          </span>
+                        )}
                         desktopTrailing={(
-                          visibleTrailingIssueColumns.length > 0 ? (
+                          <>
+                            <IssueScheduleColumns issue={issue} />
+                            {visibleTrailingIssueColumns.length > 0 ? (
                             <InboxIssueTrailingColumns
                               issue={issue}
                               columns={visibleTrailingIssueColumns}
@@ -2312,7 +2323,8 @@ export function IssuesList({
                                 </Popover>
                               )}
                             />
-                          ) : undefined
+                            ) : null}
+                          </>
                         )}
                       />
                     </div>

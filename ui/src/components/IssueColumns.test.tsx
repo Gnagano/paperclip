@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Issue } from "@paperclipai/shared";
-import { InboxIssueMetaLeading, InboxIssueTrailingColumns } from "./IssueColumns";
+import { InboxIssueMetaLeading, InboxIssueTrailingColumns, IssueScheduleColumns } from "./IssueColumns";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,6 +90,21 @@ describe("InboxIssueMetaLeading live state", () => {
     );
     expect(text).not.toContain("Live");
     expect(text).not.toContain("live below");
+  });
+});
+
+describe("IssueScheduleColumns", () => {
+  it("renders aligned start date and estimated hours", () => {
+    const text = renderLeading(
+      <IssueScheduleColumns issue={makeIssue({ startDate: "2026-09-08", estimatedHours: 6.5 })} />,
+    );
+    expect(text).toContain("2026/09/08");
+    expect(text).toContain("6.5 H");
+  });
+
+  it("renders placeholders when schedule values are unset", () => {
+    const text = renderLeading(<IssueScheduleColumns issue={makeIssue({ startDate: null, estimatedHours: null })} />);
+    expect(text.match(/—/g)).toHaveLength(2);
   });
 });
 

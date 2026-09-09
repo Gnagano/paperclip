@@ -181,6 +181,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       status: "todo",
       priority: "medium",
       billingCode: "product",
+      startDate: "2026-09-08",
+      dueDate: "2026-09-10",
+      estimatedHours: 6.5,
     });
     const recoveryAction = await issueRecoveryActionService(db).upsertSourceScoped({
       companyId,
@@ -226,6 +229,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       status: "todo",
       priority: "medium",
       billingCode: "product",
+      startDate: "2026-09-08",
+      dueDate: "2026-09-10",
+      estimatedHours: 6.5,
       activeRecoveryAction: {
         id: recoveryAction.id,
         sourceIssueId: issueId,

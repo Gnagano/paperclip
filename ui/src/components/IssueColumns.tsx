@@ -51,6 +51,29 @@ export function issueActivityText(issue: Issue): string {
   return `Updated ${timeAgo(issue.lastActivityAt ?? issue.lastExternalCommentAt ?? issue.updatedAt)}`;
 }
 
+export function formatIssueScheduleDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[1]}/${match[2]}/${match[3]}` : value;
+}
+
+export function formatIssueScheduleHours(value: number | null | undefined): string {
+  return value == null ? "—" : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} H`;
+}
+
+export function IssueScheduleColumns({ issue }: { issue: Issue }) {
+  return (
+    <span className="grid grid-cols-[6.5rem_4rem] items-center gap-2 text-xs text-muted-foreground">
+      <span className="truncate tabular-nums" title={`Start Date: ${formatIssueScheduleDate(issue.startDate)}`}>
+        {formatIssueScheduleDate(issue.startDate)}
+      </span>
+      <span className="truncate text-right tabular-nums" title={`Hours: ${formatIssueScheduleHours(issue.estimatedHours)}`}>
+        {formatIssueScheduleHours(issue.estimatedHours)}
+      </span>
+    </span>
+  );
+}
+
 function issueTrailingGridTemplate(columns: InboxIssueColumn[]): string {
   return columns
     .map((column) => {
