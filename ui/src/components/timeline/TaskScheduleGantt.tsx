@@ -35,12 +35,55 @@ function sundayOnOrAfter(date: Date) {
   return addDays(date, day === 0 ? 0 : 7 - day);
 }
 
+function todayUtc() {
+  const today = new Date();
+  return new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+}
+
+function isWeekend(date: Date) {
+  return date.getUTCDay() === 0 || date.getUTCDay() === 6;
+}
+
+function nextWorkingDay(date: Date) {
+  let result = date;
+  while (isWeekend(result)) result = addDays(result, 1);
+  return result;
+}
+
+function capacityHoursBetween(start: Date, end: Date, skipWeekends: boolean) {
+  let hours = 0;
+  for (let day = start; day < end; day = addDays(day, 1)) {
+    if (!skipWeekends || !isWeekend(day)) hours += HOURS_PER_DAY;
+  }
+  return hours;
+}
+
+export function calendarPointForCapacityHour(start: Date, hour: number, skipWeekends: boolean) {
+  let day = skipWeekends ? nextWorkingDay(start) : start;
+  let wholeDays = Math.floor(hour / HOURS_PER_DAY);
+  while (wholeDays > 0) {
+    day = addDays(day, 1);
+    if (!skipWeekends || !isWeekend(day)) wholeDays -= 1;
+  }
+  return { day, hour: hour % HOURS_PER_DAY };
+}
+
+export function minimumScheduleWindow(today: Date, latest: Date | null) {
+  const start = addDays(mondayOnOrBefore(today), -7);
+  const minimumEnd = addDays(start, 27);
+  return { start, end: latest && latest > minimumEnd ? sundayOnOrAfter(latest) : minimumEnd };
+}
+
 function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
 function shortDate(date: Date) {
   return `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function relativeWeekLabel(index: number) {
+  return ["Last week", "This week", "Next week", "Week after next"][index] ?? `Week +${index - 1}`;
 }
 
 function hours(value: number | null | undefined) {
@@ -78,11 +121,12 @@ function hasSchedulableEffort(issue: Issue) {
   return Boolean(issue.startDate) && issue.estimatedHours != null && issue.estimatedHours > 0;
 }
 
-export function calculateTaskPlacements(issues: Issue[]) {
+export function calculateTaskPlacements(issues: Issue[], skipWeekends = false) {
   const schedulable = issues.filter(hasSchedulableEffort);
   const firstDate = schedulable.map((issue) => issue.startDate!).sort()[0] ?? null;
   const placements = new Map<string, TaskPlacement>();
   if (!firstDate) return { firstDate, placements };
+  const scheduleStart = skipWeekends ? nextWorkingDay(utcDay(firstDate)) : utcDay(firstDate);
 
   const remaining = new Map(schedulable.map((issue) => [issue.id, issue]));
   let cursorHour = 0;
@@ -99,7 +143,8 @@ export function calculateTaskPlacements(issues: Issue[]) {
       return (left.title || left.identifier || "").localeCompare(right.title || right.identifier || "", undefined, { sensitivity: "base" });
     });
     const issue = candidates[0]!;
-    const plannedStartHour = Math.round((utcDay(issue.startDate!).getTime() - utcDay(firstDate).getTime()) / DAY_MS) * HOURS_PER_DAY;
+    const issueStart = skipWeekends ? nextWorkingDay(utcDay(issue.startDate!)) : utcDay(issue.startDate!);
+    const plannedStartHour = capacityHoursBetween(scheduleStart, issueStart, skipWeekends);
     const blockerEndHour = Math.max(0, ...(issue.blockedBy ?? []).map((blocker) => placements.get(blocker.id)?.endHour ?? 0));
     const startHour = Math.max(plannedStartHour, cursorHour, blockerEndHour);
     const endHour = startHour + (issue.estimatedHours ?? 0);
@@ -142,15 +187,14 @@ export function visibleTaskScheduleGroups(groups: ScheduleGroup[], showBacklog: 
   return showBacklog ? groups : groups.filter((group) => group.name !== BACKLOG_GROUP);
 }
 
-function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort }) {
-  const schedule = useMemo(() => calculateTaskPlacements(group.issues), [group.issues]);
+function GroupChart({ group, projects, sortBy, skipWeekends }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort; skipWeekends: boolean }) {
+  const schedule = useMemo(() => calculateTaskPlacements(group.issues, skipWeekends), [group.issues, skipWeekends]);
   const sortedIssues = useMemo(() => sortScheduledTasks(group.issues, sortBy, schedule.placements), [group.issues, schedule.placements, sortBy]);
   const rawStart = schedule.firstDate ?? dateKey(new Date());
   const lastEndHour = Math.max(0, ...[...schedule.placements.values()].map((placement) => placement.endHour));
-  const rawEnd = dateKey(addDays(utcDay(rawStart), Math.floor(lastEndHour / HOURS_PER_DAY)));
-  const start = mondayOnOrBefore(utcDay(rawStart));
-  let end = sundayOnOrAfter(utcDay(rawEnd));
-  if ((end.getTime() - start.getTime()) / DAY_MS < 13) end = addDays(start, 13);
+  const scheduleBase = skipWeekends ? nextWorkingDay(utcDay(rawStart)) : utcDay(rawStart);
+  const latestPoint = calendarPointForCapacityHour(scheduleBase, Math.max(0, lastEndHour - 0.001), skipWeekends);
+  const { start, end } = minimumScheduleWindow(todayUtc(), latestPoint.day);
   const dayCount = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1;
   const days = Array.from({ length: dayCount }, (_, index) => addDays(start, index));
   const weeks = Array.from({ length: Math.ceil(dayCount / 7) }, (_, index) => {
@@ -159,7 +203,7 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
     const total = group.issues.reduce((sum, issue) => {
       const placement = schedule.placements.get(issue.id);
       if (!placement) return sum;
-      const taskStart = addDays(utcDay(rawStart), Math.floor(placement.startHour / HOURS_PER_DAY)).getTime();
+      const taskStart = calendarPointForCapacityHour(scheduleBase, placement.startHour, skipWeekends).day.getTime();
       return taskStart >= weekStart.getTime() && taskStart <= weekEnd.getTime()
         ? sum + (issue.estimatedHours ?? 0)
         : sum;
@@ -182,7 +226,7 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
             <div className="flex" style={{ width: chartWidth }}>
               {weeks.map((week) => (
                 <div key={dateKey(week.start)} className="flex shrink-0 items-center justify-between border-r border-border px-3 py-2 text-xs" style={{ width: DAY_WIDTH * 7 }}>
-                  <span className="text-muted-foreground">{shortDate(week.start)} - {shortDate(week.end)}</span>
+                  <span className="text-muted-foreground">{relativeWeekLabel(weeks.indexOf(week))} · {shortDate(week.start)} - {shortDate(week.end)}</span>
                   <span className="font-semibold tabular-nums">{hours(week.total)} H</span>
                 </div>
               ))}
@@ -191,7 +235,7 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
           <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
             <div className="sticky left-0 z-20 w-[360px] shrink-0 border-r border-border bg-card" />
             {days.map((day) => (
-              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/45" : ""}`} style={{ width: DAY_WIDTH }}>
+              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
                 <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" aria-hidden="true" />
                 {day.getUTCDate()}
               </div>
@@ -199,7 +243,6 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
           </div>
           {sortedIssues.map((issue) => {
             const placement = schedule.placements.get(issue.id);
-            const baseOffsetHours = Math.round((utcDay(rawStart).getTime() - start.getTime()) / DAY_MS) * HOURS_PER_DAY;
             const estimatedHours = Math.max(0, issue.estimatedHours ?? 0);
             const workWidth = estimatedHours > 0 ? Math.max(12, estimatedHours / HOURS_PER_DAY * DAY_WIDTH) : 0;
             const project = issue.projectId ? projects.get(issue.projectId) : undefined;
@@ -222,20 +265,38 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
                 </div>
                 <div className="relative h-14" style={{ width: chartWidth }}>
                   {days.map((day, dayIndex) => (
-                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/35" : ""}`} style={{ left: (dayIndex + 1) * DAY_WIDTH - 1 }}>
+                    <span key={dateKey(day)} className="absolute inset-y-0 border-r border-border/50" style={{ left: (dayIndex + 1) * DAY_WIDTH - 1 }}>
                       <span className="absolute inset-y-0 border-l border-dashed border-border/40" style={{ left: -DAY_WIDTH / 2 }} aria-hidden="true" />
                     </span>
                   ))}
-                  {placement && workWidth > 0 ? (
-                    <Link
-                      to={issueUrl(issue)}
-                      className={`absolute top-5 flex h-7 items-center rounded px-2 text-xs font-medium text-white shadow-sm no-underline ${statusColor(issue.status)}`}
-                      style={{ left: ((baseOffsetHours + placement.startHour) / HOURS_PER_DAY) * DAY_WIDTH + 3, width: workWidth }}
-                      title={`${issue.title} · planned ${issue.startDate ?? "—"} · ${hours(issue.estimatedHours)} H · priority ${issue.priority}${issue.dueDate ? ` · due reference ${issue.dueDate}` : ""}`}
-                    >
-                      <span className={workWidth < 36 ? "sr-only" : "truncate"}>{hours(issue.estimatedHours)} H</span>
-                    </Link>
-                  ) : null}
+                  {placement && workWidth > 0 ? (() => {
+                    const segments: Array<{ left: number; width: number; hours: number }> = [];
+                    let cursor = placement.startHour;
+                    let remaining = estimatedHours;
+                    while (remaining > 0) {
+                      const point = calendarPointForCapacityHour(scheduleBase, cursor, skipWeekends);
+                      const segmentHours = skipWeekends ? Math.min(remaining, HOURS_PER_DAY - point.hour) : remaining;
+                      const dayOffset = Math.round((point.day.getTime() - start.getTime()) / DAY_MS);
+                      segments.push({
+                        left: (dayOffset + point.hour / HOURS_PER_DAY) * DAY_WIDTH + 3,
+                        width: Math.max(12, segmentHours / HOURS_PER_DAY * DAY_WIDTH - (skipWeekends ? 6 : 0)),
+                        hours: segmentHours,
+                      });
+                      cursor += segmentHours;
+                      remaining -= segmentHours;
+                    }
+                    return segments.map((segment, index) => (
+                      <Link
+                        key={`${issue.id}-${index}`}
+                        to={issueUrl(issue)}
+                        className={`absolute top-5 flex h-7 items-center rounded px-2 text-xs font-medium text-white shadow-sm no-underline ${statusColor(issue.status)}`}
+                        style={{ left: segment.left, width: segment.width }}
+                        title={`${issue.title} · planned ${issue.startDate ?? "—"} · ${hours(issue.estimatedHours)} H · priority ${issue.priority}${issue.dueDate ? ` · due reference ${issue.dueDate}` : ""}`}
+                      >
+                        <span className={segment.width < 36 ? "sr-only" : "truncate"}>{hours(segment.hours)} H</span>
+                      </Link>
+                    ));
+                  })() : null}
                 </div>
               </div>
             );
@@ -249,6 +310,7 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
 export function TaskScheduleGantt({ companyId }: { companyId: string }) {
   const [sortBy, setSortBy] = useState<TaskSort>("schedule");
   const [showBacklog, setShowBacklog] = useState(false);
+  const [skipWeekends, setSkipWeekends] = useState(true);
   const issuesQuery = useQuery({
     queryKey: ["task-schedule-gantt", companyId, "issues"],
     queryFn: () => issuesApi.list(companyId, { limit: 500, includeBlockedBy: true }),
@@ -275,6 +337,10 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
           <p className={needsSchedule > 0 ? "font-medium text-amber-700 dark:text-amber-300" : undefined}>{needsSchedule} task{needsSchedule === 1 ? "" : "s"} need Start Date and Hours</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-xs text-foreground">
+            <input type="checkbox" checked={skipWeekends} onChange={(event) => setSkipWeekends(event.target.checked)} />
+            Skip weekends
+          </label>
           {backlogGroup ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setShowBacklog((value) => !value)}>
               {showBacklog ? "Hide" : "Show"} Backlog ({backlogGroup.issues.length})
@@ -289,7 +355,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
         </div>
       </div>
       {visibleGroups.length > 0 ? (
-        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} />)
+        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} />)
       ) : (
         <Card className="p-6 text-center text-sm text-muted-foreground">
           No tagged schedule groups. Show Backlog to review untagged tasks.

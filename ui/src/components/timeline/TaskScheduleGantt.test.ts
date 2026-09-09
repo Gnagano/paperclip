@@ -1,6 +1,13 @@
 import type { Issue } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { buildTaskScheduleGroups, calculateTaskPlacements, sortScheduledTasks, visibleTaskScheduleGroups } from "./TaskScheduleGantt";
+import {
+  buildTaskScheduleGroups,
+  calculateTaskPlacements,
+  calendarPointForCapacityHour,
+  minimumScheduleWindow,
+  sortScheduledTasks,
+  visibleTaskScheduleGroups,
+} from "./TaskScheduleGantt";
 
 function issue(overrides: Partial<Issue>): Issue {
   return {
@@ -87,5 +94,20 @@ describe("buildTaskScheduleGroups", () => {
 
     expect(placements.get("blocker")).toEqual({ startHour: 0, endHour: 6 });
     expect(placements.get("blocked")).toEqual({ startHour: 6, endHour: 8 });
+  });
+
+  it("always shows last week through the week after next", () => {
+    const { start, end } = minimumScheduleWindow(
+      new Date("2026-09-09T00:00:00Z"),
+      new Date("2026-09-10T00:00:00Z"),
+    );
+    expect(start.toISOString().slice(0, 10)).toBe("2026-08-31");
+    expect(end.toISOString().slice(0, 10)).toBe("2026-09-27");
+  });
+
+  it("moves the second workday from Saturday to Monday when weekends are skipped", () => {
+    const friday = new Date("2026-09-11T00:00:00Z");
+    expect(calendarPointForCapacityHour(friday, 8, false).day.toISOString().slice(0, 10)).toBe("2026-09-12");
+    expect(calendarPointForCapacityHour(friday, 8, true).day.toISOString().slice(0, 10)).toBe("2026-09-14");
   });
 });
