@@ -1,6 +1,6 @@
 import type { Issue } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { buildTaskScheduleGroups } from "./TaskScheduleGantt";
+import { buildTaskScheduleGroups, sortScheduledTasks } from "./TaskScheduleGantt";
 
 function issue(overrides: Partial<Issue>): Issue {
   return {
@@ -38,11 +38,19 @@ describe("buildTaskScheduleGroups", () => {
     const groups = buildTaskScheduleGroups([
       issue({ labels: [
         label("label-1", "202609-1w", "#2563eb"),
-        label("label-2", "202609-2w", "#16a34a"),
+        label("label-2", "202609-w2", "#16a34a"),
       ] }),
     ]);
 
     expect(groups).toHaveLength(2);
     expect(groups.every((group) => group.issues[0]?.id === "issue-1")).toBe(true);
+  });
+
+  it("sorts tasks by start date or name", () => {
+    const bravo = issue({ id: "bravo", title: "Bravo", startDate: "2026-09-08" });
+    const alpha = issue({ id: "alpha", title: "Alpha", startDate: "2026-09-09" });
+
+    expect(sortScheduledTasks([alpha, bravo], "start").map((entry) => entry.id)).toEqual(["bravo", "alpha"]);
+    expect(sortScheduledTasks([bravo, alpha], "name").map((entry) => entry.id)).toEqual(["alpha", "bravo"]);
   });
 });

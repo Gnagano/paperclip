@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue, Project } from "@paperclipai/shared";
 import { issuesApi } from "@/api/issues";
@@ -8,11 +8,13 @@ import { issueUrl } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { Button } from "@/components/ui/button";
 import { CalendarRange } from "lucide-react";
 
 const DAY_MS = 86_400_000;
-const DAY_WIDTH = 48;
-const SCHEDULE_LABEL = /^\d{6}-\d+w$/i;
+const DAY_WIDTH = 56;
+const HOURS_PER_DAY = 8;
+const SCHEDULE_LABEL = /^\d{6}-(?:w\d+|\d+w)$/i;
 
 function utcDay(value: string) {
   return new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -57,6 +59,18 @@ interface ScheduleGroup {
   issues: Issue[];
 }
 
+type TaskSort = "start" | "name";
+
+export function sortScheduledTasks(issues: Issue[], sortBy: TaskSort) {
+  return [...issues].sort((left, right) => {
+    if (sortBy === "name") {
+      return (left.title || left.identifier || "").localeCompare(right.title || right.identifier || "", undefined, { sensitivity: "base" });
+    }
+    return (left.startDate ?? left.dueDate ?? "9999-12-31").localeCompare(right.startDate ?? right.dueDate ?? "9999-12-31")
+      || (left.title || left.identifier || "").localeCompare(right.title || right.identifier || "", undefined, { sensitivity: "base" });
+  });
+}
+
 export function buildTaskScheduleGroups(issues: Issue[]): ScheduleGroup[] {
   const groups = new Map<string, Issue[]>();
   for (const issue of issues) {
@@ -67,21 +81,19 @@ export function buildTaskScheduleGroups(issues: Issue[]): ScheduleGroup[] {
   }
   return [...groups.entries()]
     .sort(([left], [right]) => left === "Other scheduled tasks" ? 1 : right === "Other scheduled tasks" ? -1 : left.localeCompare(right))
-    .map(([name, groupedIssues]) => ({
-      name,
-      issues: groupedIssues.sort((left, right) =>
-        (left.startDate ?? left.dueDate ?? "").localeCompare(right.startDate ?? right.dueDate ?? "")
-        || (left.identifier ?? left.title).localeCompare(right.identifier ?? right.title)),
-    }));
+    .map(([name, groupedIssues]) => ({ name, issues: groupedIssues }));
 }
 
-function GroupChart({ group, projects }: { group: ScheduleGroup; projects: Map<string, Project> }) {
+function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort }) {
+  const sortedIssues = useMemo(() => sortScheduledTasks(group.issues, sortBy), [group.issues, sortBy]);
   const rawStart = group.issues.reduce((value, issue) => {
     const next = issue.startDate ?? issue.dueDate!;
     return !value || next < value ? next : value;
   }, "");
   const rawEnd = group.issues.reduce((value, issue) => {
-    const next = issue.dueDate ?? issue.startDate!;
+    const issueStart = utcDay(issue.startDate ?? issue.dueDate!);
+    const hoursEnd = addDays(issueStart, Math.max(0, Math.ceil((issue.estimatedHours ?? 0) / HOURS_PER_DAY) - 1));
+    const next = [issue.dueDate ?? issue.startDate!, dateKey(hoursEnd)].sort().at(-1)!;
     return !value || next > value ? next : value;
   }, "");
   const start = mondayOnOrBefore(utcDay(rawStart));
@@ -115,7 +127,7 @@ function GroupChart({ group, projects }: { group: ScheduleGroup; projects: Map<s
             </div>
             <div className="flex" style={{ width: chartWidth }}>
               {weeks.map((week) => (
-                <div key={dateKey(week.start)} className="flex w-[336px] shrink-0 items-center justify-between border-r border-border px-3 py-2 text-xs">
+                <div key={dateKey(week.start)} className="flex shrink-0 items-center justify-between border-r border-border px-3 py-2 text-xs" style={{ width: DAY_WIDTH * 7 }}>
                   <span className="text-muted-foreground">{shortDate(week.start)} - {shortDate(week.end)}</span>
                   <span className="font-semibold tabular-nums">{hours(week.total)} H</span>
                 </div>
@@ -125,16 +137,19 @@ function GroupChart({ group, projects }: { group: ScheduleGroup; projects: Map<s
           <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
             <div className="sticky left-0 z-20 w-[360px] shrink-0 border-r border-border bg-card" />
             {days.map((day) => (
-              <div key={dateKey(day)} className={`flex w-12 shrink-0 items-center justify-center border-r border-border/60 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/45" : ""}`}>
+              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/45" : ""}`} style={{ width: DAY_WIDTH }}>
+                <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" aria-hidden="true" />
                 {day.getUTCDate()}
               </div>
             ))}
           </div>
-          {group.issues.map((issue) => {
+          {sortedIssues.map((issue) => {
             const taskStart = utcDay(issue.startDate ?? issue.dueDate!);
-            const taskEnd = utcDay(issue.dueDate ?? issue.startDate!);
+            const taskEnd = new Date(Math.max(taskStart.getTime(), utcDay(issue.dueDate ?? issue.startDate!).getTime()));
             const offset = Math.max(0, Math.round((taskStart.getTime() - start.getTime()) / DAY_MS));
-            const duration = Math.max(1, Math.round((taskEnd.getTime() - taskStart.getTime()) / DAY_MS) + 1);
+            const dateDuration = Math.max(1, Math.round((taskEnd.getTime() - taskStart.getTime()) / DAY_MS) + 1);
+            const estimatedHours = Math.max(0, issue.estimatedHours ?? 0);
+            const workWidth = estimatedHours > 0 ? Math.max(12, estimatedHours / HOURS_PER_DAY * DAY_WIDTH) : 0;
             const project = issue.projectId ? projects.get(issue.projectId) : undefined;
             return (
               <div key={issue.id} className="group flex h-14 border-b border-border last:border-b-0 hover:bg-accent/25">
@@ -151,17 +166,25 @@ function GroupChart({ group, projects }: { group: ScheduleGroup; projects: Map<s
                   </Link>
                 </div>
                 <div className="relative h-14" style={{ width: chartWidth }}>
-                  {days.map((day) => (
-                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/35" : ""}`} style={{ left: (days.indexOf(day) + 1) * DAY_WIDTH - 1 }} />
+                  {days.map((day, dayIndex) => (
+                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${day.getUTCDay() === 0 || day.getUTCDay() === 6 ? "bg-muted/35" : ""}`} style={{ left: (dayIndex + 1) * DAY_WIDTH - 1 }}>
+                      <span className="absolute inset-y-0 border-l border-dashed border-border/40" style={{ left: -DAY_WIDTH / 2 }} aria-hidden="true" />
+                    </span>
                   ))}
-                  <Link
-                    to={issueUrl(issue)}
-                    className={`absolute top-3 flex h-8 items-center overflow-hidden rounded px-2 text-xs font-medium text-white shadow-sm no-underline ${statusColor(issue.status)}`}
-                    style={{ left: offset * DAY_WIDTH + 3, width: duration * DAY_WIDTH - 6 }}
-                    title={`${issue.title} · ${issue.startDate ?? "—"} - ${issue.dueDate ?? "—"} · ${hours(issue.estimatedHours)} H`}
-                  >
-                    <span className="truncate">{hours(issue.estimatedHours)} H</span>
-                  </Link>
+                  <span className="absolute top-2 h-px bg-foreground/45" style={{ left: offset * DAY_WIDTH + DAY_WIDTH / 2, width: Math.max(0, (dateDuration - 1) * DAY_WIDTH) }} aria-hidden="true">
+                    <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full border border-foreground/60 bg-card" />
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full border border-foreground/60 bg-card" />
+                  </span>
+                  {workWidth > 0 ? (
+                    <Link
+                      to={issueUrl(issue)}
+                      className={`absolute top-5 flex h-7 items-center rounded px-2 text-xs font-medium text-white shadow-sm no-underline ${statusColor(issue.status)}`}
+                      style={{ left: offset * DAY_WIDTH + 3, width: workWidth }}
+                      title={`${issue.title} · ${issue.startDate ?? "—"} - ${issue.dueDate ?? "—"} · ${hours(issue.estimatedHours)} H`}
+                    >
+                      <span className={workWidth < 36 ? "sr-only" : "truncate"}>{hours(issue.estimatedHours)} H</span>
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             );
@@ -173,6 +196,7 @@ function GroupChart({ group, projects }: { group: ScheduleGroup; projects: Map<s
 }
 
 export function TaskScheduleGantt({ companyId }: { companyId: string }) {
+  const [sortBy, setSortBy] = useState<TaskSort>("start");
   const issuesQuery = useQuery({
     queryKey: ["task-schedule-gantt", companyId, "issues"],
     queryFn: () => issuesApi.list(companyId, { limit: 500 }),
@@ -191,11 +215,18 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <p>Grouped by schedule labels such as 202609-1w · bars show Start Date through Due Date</p>
-        <p>{omitted} task{omitted === 1 ? "" : "s"} without dates omitted</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div>
+          <p>Grouped by schedule labels such as 202609-w2 · line = Start–Due · bar = estimated Hours from Start</p>
+          <p>{omitted} task{omitted === 1 ? "" : "s"} without dates omitted</p>
+        </div>
+        <div className="flex items-center gap-1" aria-label="Task schedule sort">
+          <span className="mr-1">Sort</span>
+          <Button type="button" size="sm" variant={sortBy === "start" ? "secondary" : "ghost"} onClick={() => setSortBy("start")}>Start Date</Button>
+          <Button type="button" size="sm" variant={sortBy === "name" ? "secondary" : "ghost"} onClick={() => setSortBy("name")}>Task Name</Button>
+        </div>
       </div>
-      {groups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} />)}
+      {groups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} />)}
     </div>
   );
 }
