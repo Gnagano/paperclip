@@ -1487,9 +1487,7 @@ describe("IssueDetail", () => {
       'button[aria-label="Change priority (current: medium)"]',
     );
     expect(statusButton).not.toBeNull();
-    // PAP-411: priority UI is hidden behind SHOW_TASK_PRIORITY_UI (off), so the header
-    // priority control must not render.
-    expect(priorityButton).toBeNull();
+    expect(priorityButton).not.toBeNull();
 
     await act(async () => {
       statusButton!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));

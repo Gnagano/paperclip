@@ -1,6 +1,6 @@
 import type { Issue } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { buildTaskScheduleGroups, sortScheduledTasks } from "./TaskScheduleGantt";
+import { buildTaskScheduleGroups, calculateTaskPlacements, sortScheduledTasks } from "./TaskScheduleGantt";
 
 function issue(overrides: Partial<Issue>): Issue {
   return {
@@ -9,6 +9,7 @@ function issue(overrides: Partial<Issue>): Issue {
     projectId: "project-1",
     title: "Scheduled task",
     status: "todo",
+    priority: "medium",
     startDate: "2026-09-03",
     dueDate: "2026-09-09",
     estimatedHours: 20,
@@ -31,7 +32,7 @@ describe("buildTaskScheduleGroups", () => {
 
     expect(groups.map((group) => group.name)).toEqual(["202609-1w", "Other scheduled tasks"]);
     expect(groups[0]?.issues.map((entry) => entry.id)).toEqual(["one"]);
-    expect(groups[1]?.issues.map((entry) => entry.id)).toEqual(["two"]);
+    expect(groups[1]?.issues.map((entry) => entry.id)).toEqual(["two", "three"]);
   });
 
   it("includes a task in each matching schedule label", () => {
@@ -52,5 +53,37 @@ describe("buildTaskScheduleGroups", () => {
 
     expect(sortScheduledTasks([alpha, bravo], "start").map((entry) => entry.id)).toEqual(["bravo", "alpha"]);
     expect(sortScheduledTasks([bravo, alpha], "name").map((entry) => entry.id)).toEqual(["alpha", "bravo"]);
+  });
+
+  it("places higher-priority tasks first and queues their hours", () => {
+    const lower = issue({ id: "lower", startDate: "2026-01-01", estimatedHours: 3, priority: "high" });
+    const higher = issue({ id: "higher", startDate: "2026-01-01", estimatedHours: 5, priority: "critical" });
+    const { placements } = calculateTaskPlacements([lower, higher]);
+
+    expect(placements.get("higher")).toEqual({ startHour: 0, endHour: 5 });
+    expect(placements.get("lower")).toEqual({ startHour: 5, endHour: 8 });
+  });
+
+  it("places a blocked task after its blocker", () => {
+    const blocker = issue({ id: "blocker", startDate: "2026-01-01", estimatedHours: 6, priority: "low" });
+    const blocked = issue({
+      id: "blocked",
+      startDate: "2026-01-01",
+      estimatedHours: 2,
+      priority: "critical",
+      blockedBy: [{
+        id: "blocker",
+        identifier: "ECB-1",
+        title: "Blocker",
+        status: "in_progress",
+        priority: "low",
+        assigneeAgentId: null,
+        assigneeUserId: null,
+      }],
+    });
+    const { placements } = calculateTaskPlacements([blocked, blocker]);
+
+    expect(placements.get("blocker")).toEqual({ startHour: 0, endHour: 6 });
+    expect(placements.get("blocked")).toEqual({ startHour: 6, endHour: 8 });
   });
 });

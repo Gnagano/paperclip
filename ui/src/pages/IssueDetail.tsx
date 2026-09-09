@@ -4501,13 +4501,10 @@ export function IssueDetail() {
             blockerAttention={issue.blockerAttention}
             onChange={(status) => updateIssue.mutate({ status })}
           />
-          {/* PAP-411: priority UI hidden behind SHOW_TASK_PRIORITY_UI. */}
-          {SHOW_TASK_PRIORITY_UI && (
-            <PriorityIcon
-              priority={issue.priority}
-              onChange={(priority) => updateIssue.mutate({ priority })}
-            />
-          )}
+          <PriorityIcon
+            priority={issue.priority}
+            onChange={(priority) => updateIssue.mutate({ priority })}
+          />
           <span className="text-sm font-mono text-muted-foreground shrink-0">{issue.identifier ?? issue.id.slice(0, 8)}</span>
 
           {hasLiveRuns && (
