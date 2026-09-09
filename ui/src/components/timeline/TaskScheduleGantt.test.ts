@@ -1,6 +1,6 @@
 import type { Issue } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { buildTaskScheduleGroups, calculateTaskPlacements, sortScheduledTasks } from "./TaskScheduleGantt";
+import { buildTaskScheduleGroups, calculateTaskPlacements, sortScheduledTasks, visibleTaskScheduleGroups } from "./TaskScheduleGantt";
 
 function issue(overrides: Partial<Issue>): Issue {
   return {
@@ -23,16 +23,18 @@ function label(id: string, name: string, color: string) {
 }
 
 describe("buildTaskScheduleGroups", () => {
-  it("groups dated tasks by schedule label and puts other dated tasks in a fallback group", () => {
+  it("groups tasks by schedule label and puts tasks without one in Backlog", () => {
     const groups = buildTaskScheduleGroups([
       issue({ id: "one", labels: [label("label-1", "202609-1w", "#2563eb")] }),
       issue({ id: "two", labels: [label("label-2", "backend", "#64748b")] }),
       issue({ id: "three", startDate: null, dueDate: null }),
     ]);
 
-    expect(groups.map((group) => group.name)).toEqual(["202609-1w", "Other scheduled tasks"]);
+    expect(groups.map((group) => group.name)).toEqual(["202609-1w", "Backlog"]);
     expect(groups[0]?.issues.map((entry) => entry.id)).toEqual(["one"]);
     expect(groups[1]?.issues.map((entry) => entry.id)).toEqual(["two", "three"]);
+    expect(visibleTaskScheduleGroups(groups, false).map((group) => group.name)).toEqual(["202609-1w"]);
+    expect(visibleTaskScheduleGroups(groups, true).map((group) => group.name)).toEqual(["202609-1w", "Backlog"]);
   });
 
   it("includes a task in each matching schedule label", () => {

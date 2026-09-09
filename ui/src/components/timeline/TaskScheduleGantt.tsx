@@ -15,6 +15,7 @@ const DAY_MS = 86_400_000;
 const DAY_WIDTH = 56;
 const HOURS_PER_DAY = 8;
 const SCHEDULE_LABEL = /^\d{6}-(?:w\d+|\d+w)$/i;
+const BACKLOG_GROUP = "Backlog";
 
 function utcDay(value: string) {
   return new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -129,12 +130,16 @@ export function buildTaskScheduleGroups(issues: Issue[]): ScheduleGroup[] {
   const groups = new Map<string, Issue[]>();
   for (const issue of issues) {
     const names = (issue.labels ?? []).map((label) => label.name).filter((name) => SCHEDULE_LABEL.test(name));
-    const groupNames = names.length > 0 ? names : ["Other scheduled tasks"];
+    const groupNames = names.length > 0 ? names : [BACKLOG_GROUP];
     for (const name of groupNames) groups.set(name, [...(groups.get(name) ?? []), issue]);
   }
   return [...groups.entries()]
-    .sort(([left], [right]) => left === "Other scheduled tasks" ? 1 : right === "Other scheduled tasks" ? -1 : left.localeCompare(right))
+    .sort(([left], [right]) => left === BACKLOG_GROUP ? 1 : right === BACKLOG_GROUP ? -1 : left.localeCompare(right))
     .map(([name, groupedIssues]) => ({ name, issues: groupedIssues }));
+}
+
+export function visibleTaskScheduleGroups(groups: ScheduleGroup[], showBacklog: boolean) {
+  return showBacklog ? groups : groups.filter((group) => group.name !== BACKLOG_GROUP);
 }
 
 function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort }) {
@@ -243,6 +248,7 @@ function GroupChart({ group, projects, sortBy }: { group: ScheduleGroup; project
 
 export function TaskScheduleGantt({ companyId }: { companyId: string }) {
   const [sortBy, setSortBy] = useState<TaskSort>("schedule");
+  const [showBacklog, setShowBacklog] = useState(false);
   const issuesQuery = useQuery({
     queryKey: ["task-schedule-gantt", companyId, "issues"],
     queryFn: () => issuesApi.list(companyId, { limit: 500, includeBlockedBy: true }),
@@ -252,6 +258,8 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
     queryFn: () => projectsApi.list(companyId),
   });
   const groups = useMemo(() => buildTaskScheduleGroups(issuesQuery.data ?? []), [issuesQuery.data]);
+  const backlogGroup = groups.find((group) => group.name === BACKLOG_GROUP);
+  const visibleGroups = visibleTaskScheduleGroups(groups, showBacklog);
   const projectMap = useMemo(() => new Map((projectsQuery.data ?? []).map((project) => [project.id, project])), [projectsQuery.data]);
   const needsSchedule = (issuesQuery.data ?? []).filter((issue) => !hasSchedulableEffort(issue)).length;
 
@@ -266,14 +274,27 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
           <p>Grouped by schedule labels such as 202609-w2 · bars use Start Date + Hours · Due Date is reference only</p>
           <p className={needsSchedule > 0 ? "font-medium text-amber-700 dark:text-amber-300" : undefined}>{needsSchedule} task{needsSchedule === 1 ? "" : "s"} need Start Date and Hours</p>
         </div>
-        <div className="flex items-center gap-1" aria-label="Task schedule sort">
-          <span className="mr-1">Sort</span>
-          <Button type="button" size="sm" variant={sortBy === "schedule" ? "secondary" : "ghost"} onClick={() => setSortBy("schedule")}>Schedule</Button>
-          <Button type="button" size="sm" variant={sortBy === "start" ? "secondary" : "ghost"} onClick={() => setSortBy("start")}>Start Date</Button>
-          <Button type="button" size="sm" variant={sortBy === "name" ? "secondary" : "ghost"} onClick={() => setSortBy("name")}>Task Name</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {backlogGroup ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowBacklog((value) => !value)}>
+              {showBacklog ? "Hide" : "Show"} Backlog ({backlogGroup.issues.length})
+            </Button>
+          ) : null}
+          <div className="flex items-center gap-1" aria-label="Task schedule sort">
+            <span className="mr-1">Sort</span>
+            <Button type="button" size="sm" variant={sortBy === "schedule" ? "secondary" : "ghost"} onClick={() => setSortBy("schedule")}>Schedule</Button>
+            <Button type="button" size="sm" variant={sortBy === "start" ? "secondary" : "ghost"} onClick={() => setSortBy("start")}>Start Date</Button>
+            <Button type="button" size="sm" variant={sortBy === "name" ? "secondary" : "ghost"} onClick={() => setSortBy("name")}>Task Name</Button>
+          </div>
         </div>
       </div>
-      {groups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} />)}
+      {visibleGroups.length > 0 ? (
+        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} />)
+      ) : (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          No tagged schedule groups. Show Backlog to review untagged tasks.
+        </Card>
+      )}
     </div>
   );
 }
