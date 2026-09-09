@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Button } from "@/components/ui/button";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, ChevronDown, ChevronRight } from "lucide-react";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH = 56;
@@ -108,11 +108,13 @@ function statusColor(status: Issue["status"]) {
 }
 
 interface ScheduleGroup {
+  key: string;
   name: string;
   issues: Issue[];
 }
 
 type TaskSort = "schedule" | "start" | "name";
+type ScheduleView = "tag" | "project";
 
 export interface TaskPlacement {
   startHour: number;
@@ -189,14 +191,29 @@ export function buildTaskScheduleGroups(issues: Issue[]): ScheduleGroup[] {
   }
   return [...groups.entries()]
     .sort(([left], [right]) => left === BACKLOG_GROUP ? 1 : right === BACKLOG_GROUP ? -1 : left.localeCompare(right))
-    .map(([name, groupedIssues]) => ({ name, issues: groupedIssues }));
+    .map(([name, groupedIssues]) => ({ key: `tag:${name}`, name, issues: groupedIssues }));
+}
+
+export function buildProjectScheduleGroups(issues: Issue[], projects: Map<string, Project>): ScheduleGroup[] {
+  const groups = new Map<string, Issue[]>();
+  for (const issue of issues) {
+    const key = issue.projectId ? `project:${issue.projectId}` : "project:none";
+    groups.set(key, [...(groups.get(key) ?? []), issue]);
+  }
+  return [...groups.entries()]
+    .map(([key, groupedIssues]) => {
+      const projectId = groupedIssues[0]?.projectId;
+      return { key, name: projectId ? projects.get(projectId)?.name ?? "Unknown Project" : "No Project", issues: groupedIssues };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
 }
 
 export function visibleTaskScheduleGroups(groups: ScheduleGroup[], showBacklog: boolean) {
   return showBacklog ? groups : groups.filter((group) => group.name !== BACKLOG_GROUP);
 }
 
-function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort; skipWeekends: boolean; showWeekColumns: boolean }) {
+function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns, collapsible }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort; skipWeekends: boolean; showWeekColumns: boolean; collapsible: boolean }) {
+  const [collapsed, setCollapsed] = useState(false);
   const schedule = useMemo(() => calculateTaskPlacements(group.issues, skipWeekends), [group.issues, skipWeekends]);
   const sortedIssues = useMemo(() => sortScheduledTasks(group.issues, sortBy, schedule.placements), [group.issues, schedule.placements, sortBy]);
   const rawStart = schedule.firstDate ?? dateKey(new Date());
@@ -230,11 +247,18 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
           <div className="flex border-b border-border bg-muted/35">
             <div className="sticky left-0 z-20 flex w-[360px] shrink-0 items-center justify-between border-r border-border bg-muted/95 px-4 py-2 backdrop-blur">
               <div>
-                <h2 className="text-sm font-semibold">{group.name}</h2>
+                <h2 className="flex items-center gap-1 text-sm font-semibold">
+                  {collapsible ? (
+                    <button type="button" className="-ml-1 inline-flex size-6 items-center justify-center rounded hover:bg-accent" onClick={() => setCollapsed((value) => !value)} aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}>
+                      {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+                    </button>
+                  ) : null}
+                  {group.name}
+                </h2>
                 <p className="text-xs text-muted-foreground">{group.issues.length} tasks</p>
               </div>
             </div>
-            {showWeekColumns ? <div className="flex" style={{ width: chartWidth }}>
+            {showWeekColumns && !collapsed ? <div className="flex" style={{ width: chartWidth }}>
               {weeks.map((week) => (
                 <div key={dateKey(week.start)} className="flex shrink-0 items-center justify-between border-r border-border px-3 py-2 text-xs" style={{ width: DAY_WIDTH * 7 }}>
                   <span className="text-muted-foreground">{relativeWeekLabel(weeks.indexOf(week))} · {shortDate(week.start)} - {shortDate(week.end)}</span>
@@ -243,7 +267,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
               ))}
             </div> : null}
           </div>
-          {showWeekColumns ? <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
+          {showWeekColumns && !collapsed ? <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
             <div className="sticky left-0 z-20 w-[360px] shrink-0 border-r border-border bg-card" />
             {days.map((day) => (
               <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${dateKey(day) === todayKey ? "bg-sky-100/70 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200" : day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
@@ -252,7 +276,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
               </div>
             ))}
           </div> : null}
-          {sortedIssues.map((issue) => {
+          {!collapsed ? sortedIssues.map((issue) => {
             const placement = schedule.placements.get(issue.id);
             const estimatedHours = Math.max(0, issue.estimatedHours ?? 0);
             const workWidth = estimatedHours > 0 ? Math.max(12, estimatedHours / HOURS_PER_DAY * DAY_WIDTH) : 0;
@@ -312,7 +336,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
                 </div> : null}
               </div>
             );
-          })}
+          }) : null}
         </div>
       </div>
     </Card>
@@ -320,6 +344,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
 }
 
 export function TaskScheduleGantt({ companyId }: { companyId: string }) {
+  const [view, setView] = useState<ScheduleView>("tag");
   const [sortBy, setSortBy] = useState<TaskSort>("schedule");
   const [showBacklog, setShowBacklog] = useState(false);
   const [skipWeekends, setSkipWeekends] = useState(true);
@@ -357,10 +382,11 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
     () => (issuesQuery.data ?? []).filter((issue) => !hiddenAssignees.has(assigneeKey(issue))),
     [hiddenAssignees, issuesQuery.data],
   );
-  const groups = useMemo(() => buildTaskScheduleGroups(filteredIssues), [filteredIssues]);
-  const backlogGroup = groups.find((group) => group.name === BACKLOG_GROUP);
-  const visibleGroups = visibleTaskScheduleGroups(groups, showBacklog);
   const projectMap = useMemo(() => new Map((projectsQuery.data ?? []).map((project) => [project.id, project])), [projectsQuery.data]);
+  const tagGroups = useMemo(() => buildTaskScheduleGroups(filteredIssues), [filteredIssues]);
+  const projectGroups = useMemo(() => buildProjectScheduleGroups(filteredIssues, projectMap), [filteredIssues, projectMap]);
+  const backlogGroup = tagGroups.find((group) => group.name === BACKLOG_GROUP);
+  const visibleGroups = view === "tag" ? visibleTaskScheduleGroups(tagGroups, showBacklog) : projectGroups;
   const needsSchedule = filteredIssues.filter((issue) => !hasSchedulableEffort(issue)).length;
 
   if (issuesQuery.isLoading || projectsQuery.isLoading || agentsQuery.isLoading || usersQuery.isLoading) return <PageSkeleton />;
@@ -375,6 +401,11 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
           <p className={needsSchedule > 0 ? "font-medium text-amber-700 dark:text-amber-300" : undefined}>{needsSchedule} task{needsSchedule === 1 ? "" : "s"} need Start Date and Hours</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1" aria-label="Task schedule view">
+            <span className="mr-1">View</span>
+            <Button type="button" size="sm" variant={view === "tag" ? "secondary" : "ghost"} onClick={() => setView("tag")}>By Tag</Button>
+            <Button type="button" size="sm" variant={view === "project" ? "secondary" : "ghost"} onClick={() => setView("project")}>By Project</Button>
+          </div>
           <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-xs text-foreground">
             <input type="checkbox" checked={skipWeekends} onChange={(event) => setSkipWeekends(event.target.checked)} />
             Skip weekends
@@ -383,7 +414,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
             <input type="checkbox" checked={showWeekColumns} onChange={(event) => setShowWeekColumns(event.target.checked)} />
             Show week columns
           </label>
-          {backlogGroup ? (
+          {view === "tag" && backlogGroup ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setShowBacklog((value) => !value)}>
               {showBacklog ? "Hide" : "Show"} Backlog ({backlogGroup.issues.length})
             </Button>
@@ -415,7 +446,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
         ))}
       </fieldset>
       {visibleGroups.length > 0 ? (
-        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} showWeekColumns={showWeekColumns} />)
+        visibleGroups.map((group) => <GroupChart key={group.key} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} showWeekColumns={showWeekColumns} collapsible={view === "project"} />)
       ) : (
         <Card className="p-6 text-center text-sm text-muted-foreground">
           No tagged schedule groups. Show Backlog to review untagged tasks.

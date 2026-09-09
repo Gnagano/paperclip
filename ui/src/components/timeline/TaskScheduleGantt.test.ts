@@ -1,7 +1,8 @@
-import type { Issue } from "@paperclipai/shared";
+import type { Issue, Project } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
 import {
   buildTaskScheduleGroups,
+  buildProjectScheduleGroups,
   calculateTaskPlacements,
   calendarPointForCapacityHour,
   minimumScheduleWindow,
@@ -124,5 +125,22 @@ describe("buildTaskScheduleGroups", () => {
   it("derives today from GMT+8 across the UTC date boundary", () => {
     expect(todayAtUtcOffset(new Date("2026-09-09T15:59:59Z")).toISOString().slice(0, 10)).toBe("2026-09-09");
     expect(todayAtUtcOffset(new Date("2026-09-09T16:00:00Z")).toISOString().slice(0, 10)).toBe("2026-09-10");
+  });
+});
+
+describe("buildProjectScheduleGroups", () => {
+  it("groups tasks by project and keeps unassigned tasks in No Project", () => {
+    const projects = new Map([
+      ["project-1", { id: "project-1", name: "Bravo" } as Project],
+      ["project-2", { id: "project-2", name: "Alpha" } as Project],
+    ]);
+    const groups = buildProjectScheduleGroups([
+      issue({ id: "bravo", projectId: "project-1" }),
+      issue({ id: "alpha", projectId: "project-2" }),
+      issue({ id: "none", projectId: null }),
+    ], projects);
+
+    expect(groups.map((group) => group.name)).toEqual(["Alpha", "Bravo", "No Project"]);
+    expect(groups.find((group) => group.name === "No Project")?.issues[0]?.id).toBe("none");
   });
 });
