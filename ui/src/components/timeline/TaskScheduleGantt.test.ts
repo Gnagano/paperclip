@@ -6,6 +6,7 @@ import {
   calendarPointForCapacityHour,
   minimumScheduleWindow,
   sortScheduledTasks,
+  todayAtUtcOffset,
   visibleTaskScheduleGroups,
 } from "./TaskScheduleGantt";
 
@@ -118,5 +119,10 @@ describe("buildTaskScheduleGroups", () => {
     const friday = new Date("2026-09-11T00:00:00Z");
     expect(calendarPointForCapacityHour(friday, 8, false).day.toISOString().slice(0, 10)).toBe("2026-09-12");
     expect(calendarPointForCapacityHour(friday, 8, true).day.toISOString().slice(0, 10)).toBe("2026-09-14");
+  });
+
+  it("derives today from GMT+8 across the UTC date boundary", () => {
+    expect(todayAtUtcOffset(new Date("2026-09-09T15:59:59Z")).toISOString().slice(0, 10)).toBe("2026-09-09");
+    expect(todayAtUtcOffset(new Date("2026-09-09T16:00:00Z")).toISOString().slice(0, 10)).toBe("2026-09-10");
   });
 });

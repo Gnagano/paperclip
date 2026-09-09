@@ -44,9 +44,9 @@ function sundayOnOrAfter(date: Date) {
   return addDays(date, day === 0 ? 0 : 7 - day);
 }
 
-function todayUtc() {
-  const today = new Date();
-  return new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+export function todayAtUtcOffset(now = new Date(), offsetHours = 8) {
+  const shifted = new Date(now.getTime() + offsetHours * 60 * 60 * 1000);
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
 }
 
 function isWeekend(date: Date) {
@@ -196,14 +196,16 @@ export function visibleTaskScheduleGroups(groups: ScheduleGroup[], showBacklog: 
   return showBacklog ? groups : groups.filter((group) => group.name !== BACKLOG_GROUP);
 }
 
-function GroupChart({ group, projects, sortBy, skipWeekends }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort; skipWeekends: boolean }) {
+function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: { group: ScheduleGroup; projects: Map<string, Project>; sortBy: TaskSort; skipWeekends: boolean; showWeekColumns: boolean }) {
   const schedule = useMemo(() => calculateTaskPlacements(group.issues, skipWeekends), [group.issues, skipWeekends]);
   const sortedIssues = useMemo(() => sortScheduledTasks(group.issues, sortBy, schedule.placements), [group.issues, schedule.placements, sortBy]);
   const rawStart = schedule.firstDate ?? dateKey(new Date());
   const lastEndHour = Math.max(0, ...[...schedule.placements.values()].map((placement) => placement.endHour));
   const scheduleBase = skipWeekends ? nextWorkingDay(utcDay(rawStart)) : utcDay(rawStart);
   const latestPoint = calendarPointForCapacityHour(scheduleBase, Math.max(0, lastEndHour - 0.001), skipWeekends);
-  const { start, end } = minimumScheduleWindow(todayUtc(), latestPoint.day);
+  const today = todayAtUtcOffset();
+  const todayKey = dateKey(today);
+  const { start, end } = minimumScheduleWindow(today, latestPoint.day);
   const dayCount = Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1;
   const days = Array.from({ length: dayCount }, (_, index) => addDays(start, index));
   const weeks = Array.from({ length: Math.ceil(dayCount / 7) }, (_, index) => {
@@ -232,24 +234,24 @@ function GroupChart({ group, projects, sortBy, skipWeekends }: { group: Schedule
                 <p className="text-xs text-muted-foreground">{group.issues.length} tasks</p>
               </div>
             </div>
-            <div className="flex" style={{ width: chartWidth }}>
+            {showWeekColumns ? <div className="flex" style={{ width: chartWidth }}>
               {weeks.map((week) => (
                 <div key={dateKey(week.start)} className="flex shrink-0 items-center justify-between border-r border-border px-3 py-2 text-xs" style={{ width: DAY_WIDTH * 7 }}>
                   <span className="text-muted-foreground">{relativeWeekLabel(weeks.indexOf(week))} · {shortDate(week.start)} - {shortDate(week.end)}</span>
                   <span className="font-semibold tabular-nums">{hours(week.total)} H</span>
                 </div>
               ))}
-            </div>
+            </div> : null}
           </div>
-          <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
+          {showWeekColumns ? <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
             <div className="sticky left-0 z-20 w-[360px] shrink-0 border-r border-border bg-card" />
             {days.map((day) => (
-              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
+              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${dateKey(day) === todayKey ? "bg-amber-100/70 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200" : day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
                 <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" aria-hidden="true" />
                 {day.getUTCDate()}
               </div>
             ))}
-          </div>
+          </div> : null}
           {sortedIssues.map((issue) => {
             const placement = schedule.placements.get(issue.id);
             const estimatedHours = Math.max(0, issue.estimatedHours ?? 0);
@@ -272,10 +274,11 @@ function GroupChart({ group, projects, sortBy, skipWeekends }: { group: Schedule
                     </div>
                   </Link>
                 </div>
-                <div className="relative h-14" style={{ width: chartWidth }}>
+                {showWeekColumns ? <div className="relative h-14" style={{ width: chartWidth }}>
                   {days.map((day, dayIndex) => (
-                    <span key={dateKey(day)} className="absolute inset-y-0 border-r border-border/50" style={{ left: (dayIndex + 1) * DAY_WIDTH - 1 }}>
-                      <span className="absolute inset-y-0 border-l border-dashed border-border/40" style={{ left: -DAY_WIDTH / 2 }} aria-hidden="true" />
+                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${dateKey(day) === todayKey ? "bg-amber-100/35 dark:bg-amber-950/25" : ""}`} style={{ left: dayIndex * DAY_WIDTH, width: DAY_WIDTH }}>
+                      <span className="absolute inset-y-0 right-0 border-r border-border/50" aria-hidden="true" />
+                      <span className="absolute inset-y-0 border-l border-dashed border-border/40" style={{ left: DAY_WIDTH / 2 }} aria-hidden="true" />
                     </span>
                   ))}
                   {placement && workWidth > 0 ? (() => {
@@ -306,7 +309,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends }: { group: Schedule
                       </Link>
                     ));
                   })() : null}
-                </div>
+                </div> : null}
               </div>
             );
           })}
@@ -320,6 +323,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
   const [sortBy, setSortBy] = useState<TaskSort>("schedule");
   const [showBacklog, setShowBacklog] = useState(false);
   const [skipWeekends, setSkipWeekends] = useState(true);
+  const [showWeekColumns, setShowWeekColumns] = useState(true);
   const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(() => new Set());
   const issuesQuery = useQuery({
     queryKey: ["task-schedule-gantt", companyId, "issues"],
@@ -375,6 +379,10 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
             <input type="checkbox" checked={skipWeekends} onChange={(event) => setSkipWeekends(event.target.checked)} />
             Skip weekends
           </label>
+          <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-xs text-foreground">
+            <input type="checkbox" checked={showWeekColumns} onChange={(event) => setShowWeekColumns(event.target.checked)} />
+            Show week columns
+          </label>
           {backlogGroup ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setShowBacklog((value) => !value)}>
               {showBacklog ? "Hide" : "Show"} Backlog ({backlogGroup.issues.length})
@@ -407,7 +415,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
         ))}
       </fieldset>
       {visibleGroups.length > 0 ? (
-        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} />)
+        visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} showWeekColumns={showWeekColumns} />)
       ) : (
         <Card className="p-6 text-center text-sm text-muted-foreground">
           No tagged schedule groups. Show Backlog to review untagged tasks.
