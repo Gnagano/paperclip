@@ -14,7 +14,7 @@ import { CalendarRange } from "lucide-react";
 const DAY_MS = 86_400_000;
 const DAY_WIDTH = 56;
 const HOURS_PER_DAY = 8;
-const SCHEDULE_LABEL = /^\d{6}-(?:w\d+|\d+w)$/i;
+const SCHEDULE_LABEL = /^\d{6}-(?:[ws]\d+|\d+[ws])$/i;
 const BACKLOG_GROUP = "Backlog";
 
 function utcDay(value: string) {

@@ -56,6 +56,15 @@ describe("buildTaskScheduleGroups", () => {
     expect(groups.every((group) => group.issues[0]?.id === "issue-1")).toBe(true);
   });
 
+  it("recognizes sprint labels in both supported positions", () => {
+    const groups = buildTaskScheduleGroups([
+      issue({ id: "sprint-one", labels: [label("label-s1", "202609-1s", "#2563eb")] }),
+      issue({ id: "sprint-two", labels: [label("label-s2", "202609-s2", "#16a34a")] }),
+    ]);
+
+    expect(groups.map((group) => group.name)).toEqual(["202609-1s", "202609-s2"]);
+  });
+
   it("sorts tasks by start date or name", () => {
     const bravo = issue({ id: "bravo", title: "Bravo", startDate: "2026-09-08" });
     const alpha = issue({ id: "alpha", title: "Alpha", startDate: "2026-09-09" });
