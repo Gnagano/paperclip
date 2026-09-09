@@ -364,7 +364,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
   if ((issuesQuery.data ?? []).length === 0) return <EmptyState icon={CalendarRange} message="No tasks to schedule." />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div>
           <p>Grouped by schedule labels such as 202609-1s · bars use Start Date + Hours · Due Date is reference only</p>
