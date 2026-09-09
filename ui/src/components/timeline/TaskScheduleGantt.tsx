@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { Issue, Project } from "@paperclipai/shared";
 import { issuesApi } from "@/api/issues";
 import { projectsApi } from "@/api/projects";
+import { agentsApi } from "@/api/agents";
+import { accessApi } from "@/api/access";
+import { buildCompanyUserLabelMap } from "@/lib/company-members";
 import { Link } from "@/lib/router";
 import { issueUrl } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -16,6 +19,12 @@ const DAY_WIDTH = 56;
 const HOURS_PER_DAY = 8;
 const SCHEDULE_LABEL = /^\d{6}-(?:[ws]\d+|\d+[ws])$/i;
 const BACKLOG_GROUP = "Backlog";
+
+function assigneeKey(issue: Issue) {
+  if (issue.assigneeUserId) return `user:${issue.assigneeUserId}`;
+  if (issue.assigneeAgentId) return `agent:${issue.assigneeAgentId}`;
+  return "unassigned";
+}
 
 function utcDay(value: string) {
   return new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -311,6 +320,7 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
   const [sortBy, setSortBy] = useState<TaskSort>("schedule");
   const [showBacklog, setShowBacklog] = useState(false);
   const [skipWeekends, setSkipWeekends] = useState(true);
+  const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(() => new Set());
   const issuesQuery = useQuery({
     queryKey: ["task-schedule-gantt", companyId, "issues"],
     queryFn: () => issuesApi.list(companyId, { limit: 500, includeBlockedBy: true }),
@@ -319,21 +329,45 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
     queryKey: ["task-schedule-gantt", companyId, "projects"],
     queryFn: () => projectsApi.list(companyId),
   });
-  const groups = useMemo(() => buildTaskScheduleGroups(issuesQuery.data ?? []), [issuesQuery.data]);
+  const agentsQuery = useQuery({
+    queryKey: ["task-schedule-gantt", companyId, "agents"],
+    queryFn: () => agentsApi.list(companyId),
+  });
+  const usersQuery = useQuery({
+    queryKey: ["task-schedule-gantt", companyId, "users"],
+    queryFn: () => accessApi.listUserDirectory(companyId),
+  });
+  const userLabels = useMemo(() => buildCompanyUserLabelMap(usersQuery.data?.users), [usersQuery.data?.users]);
+  const assigneeOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    const agentNames = new Map((agentsQuery.data ?? []).map((agent) => [agent.id, agent.name]));
+    for (const issue of issuesQuery.data ?? []) {
+      const key = assigneeKey(issue);
+      if (key === "unassigned") options.set(key, "Unassigned");
+      else if (issue.assigneeUserId) options.set(key, userLabels.get(issue.assigneeUserId) ?? issue.assigneeUserId.slice(0, 8));
+      else if (issue.assigneeAgentId) options.set(key, agentNames.get(issue.assigneeAgentId) ?? issue.assigneeAgentId.slice(0, 8));
+    }
+    return [...options.entries()].sort((left, right) => left[1].localeCompare(right[1]));
+  }, [agentsQuery.data, issuesQuery.data, userLabels]);
+  const filteredIssues = useMemo(
+    () => (issuesQuery.data ?? []).filter((issue) => !hiddenAssignees.has(assigneeKey(issue))),
+    [hiddenAssignees, issuesQuery.data],
+  );
+  const groups = useMemo(() => buildTaskScheduleGroups(filteredIssues), [filteredIssues]);
   const backlogGroup = groups.find((group) => group.name === BACKLOG_GROUP);
   const visibleGroups = visibleTaskScheduleGroups(groups, showBacklog);
   const projectMap = useMemo(() => new Map((projectsQuery.data ?? []).map((project) => [project.id, project])), [projectsQuery.data]);
-  const needsSchedule = (issuesQuery.data ?? []).filter((issue) => !hasSchedulableEffort(issue)).length;
+  const needsSchedule = filteredIssues.filter((issue) => !hasSchedulableEffort(issue)).length;
 
-  if (issuesQuery.isLoading || projectsQuery.isLoading) return <PageSkeleton />;
-  if (issuesQuery.error || projectsQuery.error) return <EmptyState icon={CalendarRange} message="Couldn't load the task schedule." />;
-  if (groups.length === 0) return <EmptyState icon={CalendarRange} message="No tasks to schedule." />;
+  if (issuesQuery.isLoading || projectsQuery.isLoading || agentsQuery.isLoading || usersQuery.isLoading) return <PageSkeleton />;
+  if (issuesQuery.error || projectsQuery.error || agentsQuery.error || usersQuery.error) return <EmptyState icon={CalendarRange} message="Couldn't load the task schedule." />;
+  if ((issuesQuery.data ?? []).length === 0) return <EmptyState icon={CalendarRange} message="No tasks to schedule." />;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div>
-          <p>Grouped by schedule labels such as 202609-w2 · bars use Start Date + Hours · Due Date is reference only</p>
+          <p>Grouped by schedule labels such as 202609-1s · bars use Start Date + Hours · Due Date is reference only</p>
           <p className={needsSchedule > 0 ? "font-medium text-amber-700 dark:text-amber-300" : undefined}>{needsSchedule} task{needsSchedule === 1 ? "" : "s"} need Start Date and Hours</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -354,6 +388,24 @@ export function TaskScheduleGantt({ companyId }: { companyId: string }) {
           </div>
         </div>
       </div>
+      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border px-3 py-2">
+        <legend className="px-1 text-xs font-medium text-foreground">Assignees</legend>
+        {assigneeOptions.map(([key, label]) => (
+          <label key={key} className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={!hiddenAssignees.has(key)}
+              onChange={(event) => setHiddenAssignees((current) => {
+                const next = new Set(current);
+                if (event.target.checked) next.delete(key);
+                else next.add(key);
+                return next;
+              })}
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
       {visibleGroups.length > 0 ? (
         visibleGroups.map((group) => <GroupChart key={group.name} group={group} projects={projectMap} sortBy={sortBy} skipWeekends={skipWeekends} />)
       ) : (
