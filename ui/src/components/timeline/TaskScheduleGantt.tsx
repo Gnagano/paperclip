@@ -246,7 +246,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
           {showWeekColumns ? <div className="flex h-7 border-b border-border text-[10px] text-muted-foreground">
             <div className="sticky left-0 z-20 w-[360px] shrink-0 border-r border-border bg-card" />
             {days.map((day) => (
-              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${dateKey(day) === todayKey ? "bg-amber-100/70 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200" : day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
+              <div key={dateKey(day)} className={`relative flex shrink-0 items-center justify-center border-r border-border/60 ${dateKey(day) === todayKey ? "bg-sky-100/70 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200" : day.getUTCDay() === 6 ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" : day.getUTCDay() === 0 ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : ""}`} style={{ width: DAY_WIDTH }}>
                 <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-border/70" aria-hidden="true" />
                 {day.getUTCDate()}
               </div>
@@ -276,7 +276,7 @@ function GroupChart({ group, projects, sortBy, skipWeekends, showWeekColumns }: 
                 </div>
                 {showWeekColumns ? <div className="relative h-14" style={{ width: chartWidth }}>
                   {days.map((day, dayIndex) => (
-                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${dateKey(day) === todayKey ? "bg-amber-100/35 dark:bg-amber-950/25" : ""}`} style={{ left: dayIndex * DAY_WIDTH, width: DAY_WIDTH }}>
+                    <span key={dateKey(day)} className={`absolute inset-y-0 border-r border-border/50 ${dateKey(day) === todayKey ? "bg-sky-100/35 dark:bg-sky-950/25" : ""}`} style={{ left: dayIndex * DAY_WIDTH, width: DAY_WIDTH }}>
                       <span className="absolute inset-y-0 right-0 border-r border-border/50" aria-hidden="true" />
                       <span className="absolute inset-y-0 border-l border-dashed border-border/40" style={{ left: DAY_WIDTH / 2 }} aria-hidden="true" />
                     </span>
