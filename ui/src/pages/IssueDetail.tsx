@@ -131,6 +131,7 @@ import {
 } from "../components/IssueMonitorBanner";
 import { IssueScheduledRetryCard } from "../components/IssueScheduledRetryCard";
 import { IssueProperties, type IssuePropertiesDocumentDeepLink } from "../components/IssueProperties";
+import { IssueDescriptionPanel } from "../components/IssueDescriptionPanel";
 import { PauseAffectsSummaryView } from "../components/interrupt-handoff/InterruptHandoffViews";
 import { computePauseAffectsSummary } from "../lib/interrupt-handoff";
 import { useIssueExternalObjects } from "../hooks/useIssueExternalObjects";
@@ -194,6 +195,7 @@ import {
   ScanEye,
   Flag,
   FileCode2,
+  FileText,
   ListTree,
   MessageSquare,
   MoreHorizontal,
@@ -1712,6 +1714,7 @@ export function IssueDetail() {
     : undefined;
   const { openNewIssue } = useDialogActions();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
+  const [sidePanelMode, setSidePanelMode] = useState<"properties" | "description">("properties");
   const { setBreadcrumbs, setMobileToolbar } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -3498,9 +3501,22 @@ export function IssueDetail() {
   }, [issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!panelIssue || suppressPanelForFirstTask) {
+    if (!panelIssue || (sidePanelMode === "properties" && suppressPanelForFirstTask)) {
       closePanel();
       return;
+    }
+    if (sidePanelMode === "description") {
+      openPanel(
+        <IssueDescriptionPanel
+          description={panelIssue.description ?? ""}
+          onSave={(description) => updateIssue.mutateAsync({ description })}
+          mentions={mentionOptions}
+          externalReferences={externalObjectsState.isEnabled
+            ? externalObjectsState.markdownReferences
+            : undefined}
+        />,
+      );
+      return () => closePanel();
     }
     openPanel(
       <IssueProperties
@@ -3527,6 +3543,7 @@ export function IssueDetail() {
     openPanel,
     panelChildIssues,
     panelIssue,
+    sidePanelMode,
     suppressPanelForFirstTask,
     resolvedHasActiveRun,
     checkIssueMonitorNow.isPending,
@@ -3536,7 +3553,10 @@ export function IssueDetail() {
     externalObjectsState.isLoading,
     externalObjectsState.isError,
     externalObjectsState.refetch,
+    externalObjectsState.markdownReferences,
     documentDeepLink,
+    mentionOptions,
+    updateIssue.mutateAsync,
   ]);
 
   const goToInboxShortcutArmedRef = useRef(false);
@@ -4689,21 +4709,40 @@ export function IssueDetail() {
             <Button
               variant="ghost"
               size="icon-xs"
-              className={cn(
-                "shrink-0 transition-opacity duration-200",
-                panelVisible && !suppressPanelForFirstTask
-                  ? "opacity-0 pointer-events-none w-0 overflow-hidden"
-                  : "opacity-100",
-              )}
+              className="shrink-0"
               onClick={() => {
+                if (sidePanelMode === "properties" && panelVisible) {
+                  setPanelVisible(false);
+                  return;
+                }
                 if (suppressPanelForFirstTask && issue?.id) {
                   setFirstTaskPanelOverrideIssueId(issue.id);
                 }
+                setSidePanelMode("properties");
                 setPanelVisible(true);
               }}
-              title="Show properties"
+              title={sidePanelMode === "properties" && panelVisible ? "Hide properties" : "Show properties"}
+              aria-pressed={sidePanelMode === "properties" && panelVisible}
             >
               <SlidersHorizontal className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0"
+              onClick={() => {
+                if (sidePanelMode === "description" && panelVisible) {
+                  setPanelVisible(false);
+                  return;
+                }
+                setSidePanelMode("description");
+                setPanelVisible(true);
+              }}
+              title={sidePanelMode === "description" && panelVisible ? "Hide description" : "Show description"}
+              aria-label="Toggle description panel"
+              aria-pressed={sidePanelMode === "description" && panelVisible}
+            >
+              <FileText className="h-4 w-4" />
             </Button>
 
             <Popover open={moreOpen} onOpenChange={setMoreOpen}>
