@@ -3500,19 +3500,31 @@ export function IssueDetail() {
     markIssueRead.mutate(issue.id);
   }, [issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const descriptionPanelDataRef = useRef({
+    mentionOptions,
+    markdownReferences: externalObjectsState.markdownReferences,
+    save: (description: string) => updateIssue.mutateAsync({ description }),
+  });
+  descriptionPanelDataRef.current = {
+    mentionOptions,
+    markdownReferences: externalObjectsState.markdownReferences,
+    save: (description: string) => updateIssue.mutateAsync({ description }),
+  };
+
   useEffect(() => {
     if (!panelIssue || (sidePanelMode === "properties" && suppressPanelForFirstTask)) {
       closePanel();
       return;
     }
     if (sidePanelMode === "description") {
+      const descriptionPanelData = descriptionPanelDataRef.current;
       openPanel(
         <IssueDescriptionPanel
           description={panelIssue.description ?? ""}
-          onSave={(description) => updateIssue.mutateAsync({ description })}
-          mentions={mentionOptions}
+          onSave={descriptionPanelData.save}
+          mentions={descriptionPanelData.mentionOptions}
           externalReferences={externalObjectsState.isEnabled
-            ? externalObjectsState.markdownReferences
+            ? descriptionPanelData.markdownReferences
             : undefined}
         />,
       );
@@ -3553,10 +3565,7 @@ export function IssueDetail() {
     externalObjectsState.isLoading,
     externalObjectsState.isError,
     externalObjectsState.refetch,
-    externalObjectsState.markdownReferences,
     documentDeepLink,
-    mentionOptions,
-    updateIssue.mutateAsync,
   ]);
 
   const goToInboxShortcutArmedRef = useRef(false);
@@ -4711,7 +4720,7 @@ export function IssueDetail() {
               size="icon-xs"
               className="shrink-0"
               onClick={() => {
-                if (sidePanelMode === "properties" && panelVisible) {
+                if (sidePanelMode === "properties" && panelVisible && !suppressPanelForFirstTask) {
                   setPanelVisible(false);
                   return;
                 }
@@ -4721,8 +4730,8 @@ export function IssueDetail() {
                 setSidePanelMode("properties");
                 setPanelVisible(true);
               }}
-              title={sidePanelMode === "properties" && panelVisible ? "Hide properties" : "Show properties"}
-              aria-pressed={sidePanelMode === "properties" && panelVisible}
+              title={sidePanelMode === "properties" && panelVisible && !suppressPanelForFirstTask ? "Hide properties" : "Show properties"}
+              aria-pressed={sidePanelMode === "properties" && panelVisible && !suppressPanelForFirstTask}
             >
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
